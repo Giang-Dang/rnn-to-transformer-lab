@@ -37,11 +37,11 @@ def main() -> None:
     print(header)
     for radius in RADII:
         gen = torch.Generator().manual_seed(1)
-        w_rec = random_normal_matrix(N_HIDDEN, radius, gen)
+        w_hh = random_normal_matrix(N_HIDDEN, radius, gen)
         model = PlainRNN(
-            w_rec=w_rec,
-            w_in=torch.zeros(N_HIDDEN, 1, dtype=torch.float64),
-            bias=torch.zeros(N_HIDDEN, dtype=torch.float64),
+            w_hh=w_hh,
+            w_xh=torch.zeros(N_HIDDEN, 1, dtype=torch.float64),
+            b_h=torch.zeros(N_HIDDEN, dtype=torch.float64),
             act="tanh",
         )
         states = model.unroll(x0, N_STEPS)
@@ -49,7 +49,7 @@ def main() -> None:
         rate = decay_rate(norms, 50, 100)
         cells = "  ".join(f"{norms[l]:<11.4e}" for l in REPORT_AT)
         print(
-            f"{spectral_radius(w_rec):.3f}   {spectral_norm(w_rec):.3f}      {cells}  {rate:.4f}"
+            f"{spectral_radius(w_hh):.3f}   {spectral_norm(w_hh):.3f}      {cells}  {rate:.4f}"
         )
 
     print()

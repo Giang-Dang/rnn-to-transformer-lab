@@ -25,7 +25,7 @@ REPORT_AT = (0, 5, 10, 20, 28)
 
 
 def backward_signals(states: list[torch.Tensor]) -> list[torch.Tensor]:
-    """dE/dx_k for every k, for the cost E = 0.5 ||x_T||^2.
+    """dE/da_k for every k, for the cost E = 0.5 ||x_T||^2.
 
     A norm of the final state rather than a task loss: chapter 3 is about what
     the recurrence does to a signal travelling backwards, and any cost that
@@ -49,11 +49,11 @@ def main() -> None:
     print(f"{'radius':>7} " + " ".join(f"ratio@k={k:<4}" for k in REPORT_AT) + f" {'mean':>9} {'Omega':>12}")
     for radius in RADII:
         gen = torch.Generator().manual_seed(1)
-        w_rec = random_normal_matrix(N_HIDDEN, radius, gen)
+        w_hh = random_normal_matrix(N_HIDDEN, radius, gen)
         model = PlainRNN(
-            w_rec=w_rec,
-            w_in=torch.zeros(N_HIDDEN, 1, dtype=torch.float64),
-            bias=torch.zeros(N_HIDDEN, dtype=torch.float64),
+            w_hh=w_hh,
+            w_xh=torch.zeros(N_HIDDEN, 1, dtype=torch.float64),
+            b_h=torch.zeros(N_HIDDEN, dtype=torch.float64),
             act="tanh",
         )
         x0 = x0_base.clone().requires_grad_(True)
@@ -63,7 +63,7 @@ def main() -> None:
         total = omega(model, states, signals)
         cells = " ".join(f"{ratios[k]:<11.6f}" for k in REPORT_AT)
         mean = sum(ratios) / len(ratios)
-        print(f"{spectral_radius(w_rec):7.3f} {cells} {mean:9.6f} {total.item():12.6f}")
+        print(f"{spectral_radius(w_hh):7.3f} {cells} {mean:9.6f} {total.item():12.6f}")
 
     print()
     print("A ratio of 1 is a step that changed nothing. Omega is the summed squared")

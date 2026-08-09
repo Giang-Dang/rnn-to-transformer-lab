@@ -19,10 +19,10 @@ from .rnn import PlainRNN
 
 
 def jacobian_product(model: PlainRNN, states: list[torch.Tensor], k: int, t: int) -> torch.Tensor:
-    """d x_t / d x_k, as the product of Jacobians from equation (5).
+    """d a_t / d a_k, as the product of Jacobians from equation (5).
 
     `states` is what `PlainRNN.unroll` returned, so `states[i]` is the state at
-    time i. The product runs over i = k+1 ... t of d x_i / d x_{i-1}, each
+    time i. The product runs over i = k+1 ... t of d a_i / d a_{i-1}, each
     evaluated at the state that step actually saw.
     """
     if not 0 <= k <= t < len(states):
@@ -35,7 +35,7 @@ def jacobian_product(model: PlainRNN, states: list[torch.Tensor], k: int, t: int
 
 
 def product_norms(model: PlainRNN, states: list[torch.Tensor], k: int = 0) -> list[float]:
-    """Spectral norm of d x_t / d x_k for every t from k to the end.
+    """Spectral norm of d a_t / d a_k for every t from k to the end.
 
     Returned list is indexed by distance l = t - k, so entry 0 is the norm of
     the identity and is always 1. Computed incrementally: recomputing the whole

@@ -1,24 +1,32 @@
-"""The plain recurrent network, in the parametrization Pascanu et al. use.
+"""The plain recurrent network, in the form Pascanu et al. derive against.
 
-The paper writes the recurrence as
+The book keeps one notation for all sixteen chapters (appendix A). In it,
+`x_t` is the input, `a_t` the pre-activation, `h_t = sigma(a_t)` the hidden
+state, and the matrices are `W_xh`, `W_hh`, `W_hy`. Chapter 1 fixes that and
+the chapter 1 code above already uses it.
+
+Pascanu et al. write their recurrence as
 
     x_t = W_rec sigma(x_{t-1}) + W_in u_t + b
 
-with the nonlinearity applied to the *previous* state before the recurrent
-matrix multiplies it. Their footnote calls this equivalent to the more familiar
+which looks like a different network and is not one. Their state variable is
+the book's pre-activation, and the translation is exact rather than
+approximate. Start from the familiar form,
 
-    x_t = sigma(W_rec x_{t-1} + W_in u_t + b)
+    h_t = sigma(W_hh h_{t-1} + W_xh x_t + b_h),
 
-and says it was chosen for convenience. The convenience is real: the Jacobian
-of the first form is W_rec diag(sigma'(x_{t-1})), which factors the constant
-matrix out of the state-dependent part, and every bound in the paper is built
-on that factoring.
+name the argument of sigma as a_t, so that h_t = sigma(a_t), and substitute:
 
-The two forms are not the same network for the same weights. They are the same
-family: run the first with state x and the second with state h = sigma(x) and
-you trace the same sequence. Chapter 3 derives against the paper's form. The
-familiar form is here too, because chapters 2 and 4 use it and a reader who
-compares the two should be able to run both.
+    a_t = W_hh sigma(a_{t-1}) + W_xh x_t + b_h.
+
+That is their equation, symbol for symbol, with their x as the book's a and
+their u as the book's x. Their footnote calls the two forms equivalent and
+says theirs was chosen for convenience; the convenience is that the Jacobian
+of the second is W_hh diag(sigma'(a_{t-1})), which factors the constant matrix
+out of the state-dependent part. Every bound in the paper is built on that
+factoring.
+
+So this module carries the pre-activation as the state, and calls it `a`.
 """
 
 from __future__ import annotations
@@ -71,62 +79,67 @@ def activation(name: str) -> tuple[Activation, Activation]:
 
 @dataclass
 class PlainRNN:
-    """x_t = W_rec sigma(x_{t-1}) + W_in u_t + b, the paper's equation (2).
+    """a_t = W_hh sigma(a_{t-1}) + W_xh x_t + b_h.
 
     Kept as a dataclass of plain tensors rather than an nn.Module on purpose.
     Chapter 3 is about what the Jacobians do, and every experiment here wants
-    to reach in and set the spectrum of W_rec by hand. An nn.Module would add
-    a parameter registry that nothing in this chapter uses.
+    to reach in and set the spectrum of W_hh by hand. An nn.Module would add a
+    parameter registry that nothing in this chapter uses.
     """
 
-    w_rec: torch.Tensor
-    w_in: torch.Tensor
-    bias: torch.Tensor
+    w_hh: torch.Tensor
+    w_xh: torch.Tensor
+    b_h: torch.Tensor
     act: str = "tanh"
 
     @property
     def n_hidden(self) -> int:
-        return self.w_rec.shape[0]
+        return self.w_hh.shape[0]
 
-    def step(self, x_prev: torch.Tensor, u: torch.Tensor | None = None) -> torch.Tensor:
-        """One step of the recurrence."""
+    def step(self, a_prev: torch.Tensor, x: torch.Tensor | None = None) -> torch.Tensor:
+        """One step of the recurrence, from pre-activation to pre-activation."""
         sigma, _ = activation(self.act)
-        out = self.w_rec @ sigma(x_prev) + self.bias
-        if u is not None:
-            out = out + self.w_in @ u
+        out = self.w_hh @ sigma(a_prev) + self.b_h
+        if x is not None:
+            out = out + self.w_xh @ x
         return out
 
-    def unroll(
-        self, x0: torch.Tensor, n_steps: int, inputs: torch.Tensor | None = None
-    ) -> list[torch.Tensor]:
-        """Run the recurrence and keep every state.
+    def hidden(self, a: torch.Tensor) -> torch.Tensor:
+        """h_t = sigma(a_t), the state in the book's notation."""
+        sigma, _ = activation(self.act)
+        return sigma(a)
 
-        Returns [x_0, x_1, ..., x_n_steps], so the list has n_steps + 1 entries
+    def unroll(
+        self, a0: torch.Tensor, n_steps: int, inputs: torch.Tensor | None = None
+    ) -> list[torch.Tensor]:
+        """Run the recurrence and keep every pre-activation.
+
+        Returns [a_0, a_1, ..., a_n_steps], so the list has n_steps + 1 entries
         and index t is the state at time t. The Jacobian helpers index it that
         way, and an off-by-one here is an off-by-one in every bound.
         """
-        states = [x0]
+        states = [a0]
         for t in range(n_steps):
-            u = None if inputs is None else inputs[t]
-            states.append(self.step(states[-1], u))
+            x = None if inputs is None else inputs[t]
+            states.append(self.step(states[-1], x))
         return states
 
-    def jacobian_at(self, x_prev: torch.Tensor) -> torch.Tensor:
-        """d x_t / d x_{t-1} = W_rec diag(sigma'(x_{t-1})).
+    def jacobian_at(self, a_prev: torch.Tensor) -> torch.Tensor:
+        """d a_t / d a_{t-1} = W_hh diag(sigma'(a_{t-1})).
 
-        Column-vector convention: entry (i, j) is d x_t[i] / d x_{t-1}[j].
+        Column-vector convention: entry (i, j) is d a_t[i] / d a_{t-1}[j].
 
         The paper's equation (5) prints this factor as
         W_rec^T diag(sigma'(x_{i-1})), because it propagates the gradient as a
         row vector back through time. Transposing this matrix properly gives
-        diag(sigma'(x_{t-1})) W_rec^T, so the two expressions are not literally
+        diag(sigma'(a_{t-1})) W_hh^T, so the two expressions are not literally
         transposes of each other. Nothing downstream breaks: every bound in the
         paper is on the spectral norm, and a matrix and its transpose have the
         same one. Chapter 3 states the convention rather than inheriting the
         ambiguity.
         """
         _, sigma_prime = activation(self.act)
-        return self.w_rec @ torch.diag(sigma_prime(x_prev))
+        return self.w_hh @ torch.diag(sigma_prime(a_prev))
 
 
 def with_spectral_radius(w: torch.Tensor, radius: float) -> torch.Tensor:

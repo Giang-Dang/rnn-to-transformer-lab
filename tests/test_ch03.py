@@ -37,9 +37,9 @@ REL = 1e-4
 def build(radius: float, n_hidden: int, seed: int = 1) -> PlainRNN:
     gen = torch.Generator().manual_seed(seed)
     return PlainRNN(
-        w_rec=random_normal_matrix(n_hidden, radius, gen),
-        w_in=torch.zeros(n_hidden, 1, dtype=torch.float64),
-        bias=torch.zeros(n_hidden, dtype=torch.float64),
+        w_hh=random_normal_matrix(n_hidden, radius, gen),
+        w_xh=torch.zeros(n_hidden, 1, dtype=torch.float64),
+        b_h=torch.zeros(n_hidden, dtype=torch.float64),
         act="tanh",
     )
 
@@ -66,7 +66,7 @@ def test_orthogonal_matrix_is_normal_so_radius_equals_norm():
         assert spectral_norm(w) == pytest.approx(radius, rel=REL)
 
 
-def test_jacobian_factors_as_w_rec_times_diag_sigma_prime():
+def test_jacobian_factors_as_w_hh_times_diag_sigma_prime():
     """Equation (5), checked against autograd rather than against itself."""
     seed_everything(0)
     model = build(0.9, 8)
