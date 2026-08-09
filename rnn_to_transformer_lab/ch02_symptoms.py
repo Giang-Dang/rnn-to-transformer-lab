@@ -65,7 +65,8 @@ def _rnn_bptt(
     db_y = np.zeros(y_all[0].shape[0], dtype=np.float64)
 
     dh_next = np.zeros(hidden_dim, dtype=np.float64)
-    dWhh_norms: list[float] = []
+    dWhh_norms: list[float] = []       # accumulated ||dW_hh|| after each step
+    step_norms: list[float] = []       # ||contribution from this step||
 
     for t in reversed(range(seq_len)):
         dW_hy += np.outer(dy[t], h_all[t + 1])
@@ -74,17 +75,20 @@ def _rnn_bptt(
         dh_t = W_hy.T @ dy[t] + dh_next
         da_t = dh_t * (1.0 - h_all[t + 1] ** 2)
 
-        dW_xh += np.outer(da_t, X[t])
-        dW_hh += np.outer(da_t, h_all[t])
+        contrib_xh = np.outer(da_t, X[t])
+        contrib_hh = np.outer(da_t, h_all[t])
+        dW_xh += contrib_xh
+        dW_hh += contrib_hh
         db_h += da_t
 
         dh_next = W_hh.T @ da_t
 
+        step_norms.append(float(np.linalg.norm(contrib_hh)))
         dWhh_norms.append(float(np.linalg.norm(dW_hh)))
 
     grads = {"W_xh": dW_xh, "W_hh": dW_hh, "W_hy": dW_hy,
              "b_h": db_h, "b_y": db_y}
-    return grads, dWhh_norms
+    return grads, dWhh_norms, step_norms
 
 
 # ---------------------------------------------------------------------------
@@ -151,7 +155,7 @@ def train_adding(
         dy = [np.zeros(output_dim, dtype=np.float64) for _ in range(T)]
         dy[-1] = y_all[-1] - target
 
-        grads, _ = _rnn_bptt(X, h_all, y_all, a_all, W_hh, W_hy, dy)
+        grads, _, _ = _rnn_bptt(X, h_all, y_all, a_all, W_hh, W_hy, dy)
 
         for key in grads:
             grads[key] /= T  # average gradient
@@ -175,9 +179,9 @@ def train_adding(
     h_f, y_f, a_f = _rnn_forward(X_fresh, W_xh, W_hh, W_hy, b_h, b_y)
     dy_f = [np.zeros(output_dim) for _ in range(T)]
     dy_f[-1] = y_f[-1] - tgt_fresh
-    _, dWhh_norms = _rnn_bptt(X_fresh, h_f, y_f, a_f, W_hh, W_hy, dy_f)
+    _, dWhh_norms, step_norms = _rnn_bptt(X_fresh, h_f, y_f, a_f, W_hh, W_hy, dy_f)
 
-    return final_loss, dWhh_norms, loss_before
+    return final_loss, dWhh_norms, step_norms, loss_before
 
 
 # ---------------------------------------------------------------------------
@@ -271,7 +275,7 @@ def train_copy(
             total_loss += l
             dy[t] = d
 
-        grads, _ = _rnn_bptt(X, h_all, y_all, a_all, W_hh, W_hy, dy)
+        grads, _, _ = _rnn_bptt(X, h_all, y_all, a_all, W_hh, W_hy, dy)
         for key in grads:
             grads[key] /= T_mem
 
@@ -301,9 +305,9 @@ def train_copy(
         t = T_mem + 1 + i
         _, d = _softmax_ce(y_f[t], tgt_fresh[i])
         dy_f[t] = d
-    _, dWhh_norms = _rnn_bptt(X_fresh, h_f, y_f, a_f, W_hh, W_hy, dy_f)
+    _, dWhh_norms, step_norms = _rnn_bptt(X_fresh, h_f, y_f, a_f, W_hh, W_hy, dy_f)
 
-    return final_loss, dWhh_norms, loss_before
+    return final_loss, dWhh_norms, step_norms, loss_before
 
 
 # ---------------------------------------------------------------------------
@@ -316,39 +320,50 @@ def verify() -> None:
 
     # Adding problem at various T
     print("--- Adding problem ---")
-    for T in [10, 20, 50]:
-        loss, norms, loss0 = train_adding(T, n_samples=5000)
-        norm_last = norms[0] if norms else 0  # norm at step T (closest to output)
-        norm_first = norms[-1] if len(norms) > 1 else norms[0]  # norm at step 1
+    for T, n_samp in [(10, 5000), (20, 5000), (50, 10000), (100, 20000)]:
+        loss, norms, step_norms, loss0 = train_adding(T, n_samples=n_samp)
+        norm_last = norms[0] if norms else 0
+        norm_first = norms[-1] if len(norms) > 1 else norms[0]
         ratio = norm_first / norm_last if norm_last > 1e-12 else float('inf')
         print(f"  T={T:3d}: loss={loss:.4f} (before={loss0:.4f}), "
               f"||dW_hh|| at t=1: {norm_first:.6f}, "
               f"at t=T: {norm_last:.6f}, "
               f"ratio 1/T: {ratio:.2f}")
 
+    # Adding problem with smaller hidden dim to expose vanishing
+    print("\n--- Adding problem (d_h=12) ---")
+    for T, n_samp in [(50, 10000), (100, 20000)]:
+        loss, norms, step_norms, loss0 = train_adding(
+            T, hidden_dim=12, n_samples=n_samp)
+        norm_last = norms[0] if norms else 0
+        norm_first = norms[-1] if len(norms) > 1 else norms[0]
+        ratio = norm_first / norm_last if norm_last > 1e-12 else float('inf')
+        print(f"  T={T:3d} d_h=12: loss={loss:.4f} (before={loss0:.4f}), "
+              f"ratio: {ratio:.2f}")
+
     # Copy task at various T_mem
     print("\n--- Copy task ---")
     for T_mem in [5, 10, 20]:
-        loss, norms, loss0 = train_copy(T_mem, n_epochs=2000)
+        loss, norms, step_norms, loss0 = train_copy(T_mem, n_epochs=2000)
         norm_last = norms[0] if norms else 0
         norm_first = norms[-1] if len(norms) > 1 else norms[0]
         ratio = norm_first / norm_last if norm_last > 1e-12 else float('inf')
         print(f"  T_mem={T_mem:2d}: loss={loss:.4f} (before={loss0:.4f}), "
-              f"||dW_hh|| at first: {norm_first:.6f}, "
-              f"at last: {norm_last:.6f}, "
-              f"ratio first/last: {ratio:.2f}")
+              f"acc ||dW_hh|| ratio: {ratio:.2f}")
+        # Print per-step norms (reversed: step_norms[0] is step T)
+        print(f"    per-step ||contrib_hh|| (T..1): "
+              f"{[f'{s:.4f}' for s in step_norms[:5]]}..."
+              f"{[f'{s:.4f}' for s in step_norms[-3:]]}")
 
     # Sanity checks
-    # 1. Training should reduce loss vs before-training
-    loss10, _, loss0_10 = train_adding(10, n_samples=5000)
-    assert loss10 < loss0_10 * 0.8, f"Adding T=10 should improve: {loss0_10} -> {loss10}"
+    loss10, _, _, loss0_10 = train_adding(10, n_samples=5000)
+    assert loss10 < loss0_10 * 0.8, f"Adding T=10 should improve"
 
-    # 2. Larger T should be harder (higher loss or less improvement)
-    loss50, _, loss0_50 = train_adding(50, n_samples=5000)
+    loss50, _, _, loss0_50 = train_adding(50, n_samples=5000)
     improvement_10 = loss0_10 / max(loss10, 1e-8)
     improvement_50 = loss0_50 / max(loss50, 1e-8)
     assert improvement_10 > improvement_50, \
-        f"T=10 should improve more than T=50: {improvement_10:.1f}x vs {improvement_50:.1f}x"
+        f"T=10 should improve more than T=50"
 
     print("\nAll chapter 02 checks passed.")
 
