@@ -186,7 +186,9 @@ def random_normal_matrix(n: int, radius: float, generator: torch.Generator) -> t
     return q * radius
 
 
-def jordan_block(n: int, eigenvalue: float, off_diagonal: float) -> torch.Tensor:
+def jordan_block(
+    n: int, eigenvalue: float, off_diagonal: float
+) -> torch.Tensor:
     """An upper triangular matrix: `eigenvalue` on the diagonal, `off_diagonal`
     once above it.
 

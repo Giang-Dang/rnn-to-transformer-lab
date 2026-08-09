@@ -52,7 +52,9 @@ def clip_parameters(parameters, threshold: float) -> float:
     them. This function exists so that the one line a reader should actually
     write is real code in this repo rather than a snippet in the prose.
     """
-    return torch.nn.utils.clip_grad_norm_(parameters, max_norm=threshold).item()
+    return torch.nn.utils.clip_grad_norm_(
+        parameters, max_norm=threshold
+    ).item()
 
 
 def step_with_clipping(
