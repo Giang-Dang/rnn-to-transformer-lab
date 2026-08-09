@@ -50,7 +50,8 @@ def main() -> None:
     print(f"||grad||           {norm:.6e}")
     print()
 
-    print(f"{'threshold':>10} {'fired':>6} {'step length':>14} {'w after':>16} {'b after':>16} {'cost after':>14}")
+    # Column widths are chosen so the whole table fits the book's measure.
+    print(f"{'thresh':>7} {'fired':>6} {'step':>11} {'w after':>14} {'b after':>14} {'cost':>11}")
     for threshold in THRESHOLDS:
         used, fired = (gradient, False) if threshold is None else clip_norm(gradient, threshold)
         step = used * LEARNING_RATE
@@ -60,8 +61,8 @@ def main() -> None:
         cost_after, _, _ = cost_and_gradient(w_after, b_after)
         label = "none" if threshold is None else f"{threshold}"
         print(
-            f"{label:>10} {str(fired):>6} {step_length:14.6e} "
-            f"{w_after:16.8f} {b_after:16.8f} {cost_after:14.8f}"
+            f"{label:>7} {str(fired):>6} {step_length:11.4e} "
+            f"{w_after:14.8f} {b_after:14.8f} {cost_after:11.8f}"
         )
 
     print()
