@@ -1,9 +1,9 @@
 """Chapter 4: what the paper's truncation actually costs.
 
 The 1997 algorithm does not compute the gradient. It computes the gradient with
-three derivatives replaced by zero, and the abstract says so in its second
-sentence: "Truncating the gradient where this does not do harm". The claim that
-it does no harm is the paper's, backed by "a few experiments with non-truncated
+three derivatives replaced by zero, and the abstract's third sentence opens on
+it: "Truncating the gradient where this does not do harm". The claim that it
+does no harm is the paper's, backed by "a few experiments with non-truncated
 LSTM" that found no significant difference. It is worth a number.
 
 Two quantities, over the same sequence and the same weights:
