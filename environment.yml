@@ -1,10 +1,41 @@
+# Companion environment for the book "Tu RNN den Transformer".
+#
+#   conda env create -f environment.yml
+#   conda activate rnn-to-transformer-lab
+#   python verify.py
+#
+# CPU only, deliberately. Every experiment in this repo finishes on a laptop
+# with no graphics card, in minutes. The GPU path is environment-gpu.yml, a
+# separate file rather than an edit to this one, so the default stays the one
+# the book promises.
+#
+# Why this file no longer asks conda for pytorch directly. It used to read
+#
+#     channels: [pytorch, conda-forge, defaults]
+#     dependencies: [python=3.12, numpy=2.2, pytorch=2.6, cpuonly]
+#
+# and that solve resolves to pytorch==2.6.0=cuda126_mkl_py312_..., pulling
+# cudnn with it. `cpuonly` is a marker package from the `pytorch` channel, and
+# once the solver takes pytorch from conda-forge instead it no longer holds the
+# build down. The result installs several gigabytes of CUDA on a machine the
+# book promised would not need it. It went unnoticed because the chapter 1 and
+# chapter 2 code is pure numpy and imports torch nowhere.
+#
+# The CPU wheel index below cannot be misread that way: there is no CUDA build
+# published on it.
 name: rnn-to-transformer-lab
+
 channels:
-  - pytorch
   - conda-forge
-  - defaults
+
 dependencies:
   - python=3.12
-  - numpy=2.2
-  - pytorch=2.6
-  - cpuonly
+  - numpy=2.2.*
+  - pip=25.*
+  - pytest=8.*
+  - pip:
+      - --index-url https://download.pytorch.org/whl/cpu
+      - torch==2.11.0
+      # The package itself, editable, so `import rnn_to_transformer_lab` works
+      # from any directory and from a notebook.
+      - --editable .

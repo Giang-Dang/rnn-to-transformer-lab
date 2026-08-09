@@ -1,0 +1,19 @@
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "rnn-to-transformer-lab"
+version = "0.3.0"
+description = "Companion code for the book Tu RNN den Transformer"
+requires-python = ">=3.12"
+# Dependencies are pinned in environment.yml rather than here. The book teaches
+# the conda path, and a second source of truth for the torch build is how a
+# reader ends up with the CUDA wheel by accident.
+dependencies = []
+
+[tool.setuptools]
+packages = ["rnn_to_transformer_lab"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

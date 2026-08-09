@@ -1,0 +1,28 @@
+# The optional GPU path.
+#
+# A separate file rather than an edit to environment.yml, on purpose. The book
+# promises that every experiment finishes on a machine with no graphics card,
+# and the way that promise rots is by the default install quietly becoming the
+# CUDA one. Nothing in this repo needs this file.
+#
+#   conda env create -f environment-gpu.yml
+#   conda activate rnn-to-transformer-lab-gpu
+#   python verify.py
+#
+# The CUDA build changes the RNG stream, so the tests may miss their tolerances
+# on this environment even when nothing is wrong. The numbers in the book were
+# measured on the CPU environment, and that is the one to check them against.
+name: rnn-to-transformer-lab-gpu
+
+channels:
+  - conda-forge
+
+dependencies:
+  - python=3.12
+  - numpy=2.2.*
+  - pip=25.*
+  - pytest=8.*
+  - pip:
+      - --index-url https://download.pytorch.org/whl/cu128
+      - torch==2.11.0
+      - --editable .
