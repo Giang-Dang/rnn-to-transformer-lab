@@ -12,11 +12,14 @@ when every check passes.
 import sys
 
 from rnn_to_transformer_lab import verify as ch01_verify
+from rnn_to_transformer_lab.ch02_symptoms import verify as ch02_verify
 
 
 def main() -> None:
     print("=== rnn-to-transformer-lab verification ===\n")
     ch01_verify()
+    print()
+    ch02_verify()
     print("\n=== All chapters verified ===")
 
 
