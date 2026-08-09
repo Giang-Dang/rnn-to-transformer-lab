@@ -20,7 +20,9 @@ from rnn_to_transformer_lab.rnn import GAMMA, PlainRNN, random_normal_matrix, sp
 N_HIDDEN = 64
 N_STEPS = 100
 RADII = (0.5, 0.9, 1.0, 1.2)
-REPORT_AT = (1, 10, 25, 50, 100)
+#: Four distances, not five. This table is quoted in the book, and a line wider
+#: than about 70 characters wraps inside the measure there.
+REPORT_AT = (1, 10, 50, 100)
 
 
 def main() -> None:
@@ -33,7 +35,7 @@ def main() -> None:
     generator = torch.Generator().manual_seed(0)
     x0 = torch.randn(N_HIDDEN, generator=generator, dtype=torch.float64) * 0.1
 
-    header = "radius  spec_norm  " + "  ".join(f"l={l:<9}" for l in REPORT_AT) + "  rate[50,100]"
+    header = "radius  norm   " + " ".join(f"{'l=' + str(l):<11}" for l in REPORT_AT) + "rate"
     print(header)
     for radius in RADII:
         gen = torch.Generator().manual_seed(1)
@@ -47,10 +49,8 @@ def main() -> None:
         states = model.unroll(x0, N_STEPS)
         norms = product_norms(model, states, k=0)
         rate = decay_rate(norms, 50, 100)
-        cells = "  ".join(f"{norms[l]:<11.4e}" for l in REPORT_AT)
-        print(
-            f"{spectral_radius(w_hh):.3f}   {spectral_norm(w_hh):.3f}      {cells}  {rate:.4f}"
-        )
+        cells = " ".join(f"{norms[l]:<11.4e}" for l in REPORT_AT)
+        print(f"{spectral_radius(w_hh):.3f}   {spectral_norm(w_hh):.3f}  {cells}{rate:.4f}")
 
     print()
     print(f"elapsed {time.perf_counter() - started:.2f}s")
