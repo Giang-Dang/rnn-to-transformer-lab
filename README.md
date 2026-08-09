@@ -33,6 +33,7 @@ environment, and that is the one to check them against.
 | 01 | `ch01` | Plain RNN forward pass, BPTT with Jacobians, finite-difference gradient check |
 | 02 | `ch02` | The adding problem and the copy task, with gradient norm logged per backward step |
 | 03 | `ch03` | Jacobian products through time; spectral radius against spectral norm; the error surface of the single-unit model and the wall in it; norm clipping as algorithm 1; the norm-preserving regularizer |
+| 04 | `ch04` | The 1997 memory cell with no forget gate; the constant error carousel and its derivative; the input weight conflict solved in closed form; what the paper's truncation costs; parameter counts against the plain layer; the adding problem at lag 100 |
 
 Check out a tag to get exactly the code a chapter quotes:
 
@@ -53,6 +54,7 @@ rnn_to_transformer_lab/
   surface.py         the single-hidden-unit error surface of the paper's figure 6
   clipping.py        algorithm 1, written out
   regularizer.py     equation 9, the remedy that did not survive
+  lstm.py            the 1997 memory cell, the 2000 forget gate, parameter counts
 experiments/         one script per set of numbers a chapter prints
 tests/               those numbers, asserted
 verify.py            the gate

@@ -37,12 +37,19 @@ ROOT = Path(__file__).resolve().parent
 ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     ("chapter 1 verify", "ch01", ["-c", "from rnn_to_transformer_lab import verify; verify()"], 30.0),
     ("chapter 2 verify", "ch02", ["-c", "from rnn_to_transformer_lab.ch02_symptoms import verify; verify()"], 300.0),
-    ("chapter 3 tests", "ch03", ["-m", "pytest", "-q"], 120.0),
+    ("chapter 3 tests", "ch03", ["-m", "pytest", "-q", "tests/test_ch03.py"], 120.0),
     ("experiments/ch03_decay.py", "ch03", ["experiments/ch03_decay.py"], 60.0),
     ("experiments/ch03_nonnormal.py", "ch03", ["experiments/ch03_nonnormal.py"], 60.0),
     ("experiments/ch03_surface.py", "ch03", ["experiments/ch03_surface.py"], 60.0),
     ("experiments/ch03_clipping.py", "ch03", ["experiments/ch03_clipping.py"], 60.0),
     ("experiments/ch03_regularizer.py", "ch03", ["experiments/ch03_regularizer.py"], 60.0),
+    ("chapter 4 tests", "ch04", ["-m", "pytest", "-q", "tests/test_ch04.py"], 120.0),
+    ("experiments/ch04_cec.py", "ch04", ["experiments/ch04_cec.py"], 60.0),
+    ("experiments/ch04_conflict.py", "ch04", ["experiments/ch04_conflict.py"], 60.0),
+    ("experiments/ch04_flow.py", "ch04", ["experiments/ch04_flow.py"], 60.0),
+    ("experiments/ch04_truncation.py", "ch04", ["experiments/ch04_truncation.py"], 60.0),
+    ("experiments/ch04_params.py", "ch04", ["experiments/ch04_params.py"], 60.0),
+    ("experiments/ch04_adding.py", "ch04", ["experiments/ch04_adding.py"], 60.0),
 )
 
 BUDGET_TOTAL = 600.0
