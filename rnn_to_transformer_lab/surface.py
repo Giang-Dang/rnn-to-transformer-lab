@@ -52,6 +52,63 @@ def gradient_norm(w_value: float, b_value: float, n_steps: int = N_STEPS) -> flo
     return (grad_w**2 + grad_b**2) ** 0.5
 
 
+def steepest_point(
+    w_value: float,
+    b_low: float,
+    b_high: float,
+    points: int = 401,
+    rounds: int = 4,
+    n_steps: int = N_STEPS,
+) -> tuple[float, float, float]:
+    """Nested grid search for the steepest point along b at fixed w.
+
+    Returns (gradient norm, b, cost) there. Each round keeps the best point and
+    shrinks the window by a factor of 50 around it. Nested grids rather than a
+    derivative search on purpose: the quantity being maximised is itself a
+    gradient norm, and the surface it sits on is the thing under investigation.
+
+    This lives here rather than inside an experiment script because two
+    experiments need the same point and must not disagree about it.
+    ch03_surface.py reports it, ch03_clipping.py steps from it, and
+    test_the_two_experiments_use_the_same_peak asserts they match.
+    """
+    best = (0.0, b_low, 0.0)
+    low, high = b_low, b_high
+    for _ in range(rounds):
+        step = (high - low) / (points - 1)
+        best = (0.0, low, 0.0)
+        for i in range(points):
+            b = low + i * step
+            cost, grad_w, grad_b = cost_and_gradient(w_value, b, n_steps)
+            norm = (grad_w**2 + grad_b**2) ** 0.5
+            if norm > best[0]:
+                best = (norm, b, cost)
+        width = high - low
+        low, high = best[1] - width / 100, best[1] + width / 100
+    return best
+
+
+def coarse_scan_max(
+    w_value: float, b_low: float, b_high: float, step: float, n_steps: int = N_STEPS
+) -> tuple[float, float]:
+    """Largest gradient norm a fixed-step scan finds, and where it finds it.
+
+    This exists to be wrong on purpose. A step of 0.01 across this surface
+    steps over the wall entirely, and what it returns is not a rough estimate
+    of the peak but a different number altogether. The chapter prints it as a
+    warning, so it has to be reproducible rather than remembered.
+    """
+    best = (0.0, b_low)
+    count = int(round((b_high - b_low) / step)) + 1
+    for i in range(count):
+        b = b_low + i * step
+        _, grad_w, grad_b = cost_and_gradient(w_value, b, n_steps)
+        norm = (grad_w**2 + grad_b**2) ** 0.5
+        if norm > best[0]:
+            best = (norm, b)
+    return best
+
+
 def scan_b(
     w_value: float, b_start: float, b_stop: float, n_points: int, n_steps: int = N_STEPS
 ) -> list[tuple[float, float, float]]:

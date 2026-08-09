@@ -17,7 +17,7 @@ import math
 import pytest
 import torch
 
-from rnn_to_transformer_lab.clipping import clip_norm
+from rnn_to_transformer_lab.clipping import clip_norm, clip_parameters
 from rnn_to_transformer_lab.determinism import seed_everything
 from rnn_to_transformer_lab.jacobians import decay_rate, linear_power_norms, product_norms, transient_growth
 from rnn_to_transformer_lab.regularizer import omega, step_ratios
@@ -29,7 +29,7 @@ from rnn_to_transformer_lab.rnn import (
     spectral_norm,
     spectral_radius,
 )
-from rnn_to_transformer_lab.surface import cost_and_gradient
+from rnn_to_transformer_lab.surface import coarse_scan_max, cost_and_gradient, steepest_point
 
 REL = 1e-4
 
@@ -168,13 +168,36 @@ def test_the_wall_is_one_grid_step_wide():
 
 def test_steepest_point_and_its_distance_from_the_flat():
     """Five orders of magnitude between the top of the wall and the flat."""
-    _, gw, gb = cost_and_gradient(5.0, -2.6123413579)
-    peak = math.hypot(gw, gb)
+    peak, b, _ = steepest_point(5.0, -3.0, -2.0)
     _, fw, fb = cost_and_gradient(5.0, -2.0)
     flat = math.hypot(fw, fb)
+    assert b == pytest.approx(-2.61234136, abs=1e-8)
     assert peak == pytest.approx(6.773125e03, rel=1e-3)
     assert flat == pytest.approx(5.549566e-02, rel=1e-3)
     assert math.log10(peak / flat) == pytest.approx(5.0865, abs=1e-3)
+
+
+def test_a_coarse_grid_returns_a_different_number_not_a_rough_one():
+    """A step of 0.01 steps over the wall entirely.
+
+    The chapter prints this as a warning, so it has to be reproducible. The
+    number is four orders of magnitude below the peak, which is the point.
+    """
+    norm, b = coarse_scan_max(5.0, -2.8, -2.0, 0.01)
+    assert norm == pytest.approx(2.777983e-01, rel=1e-3)
+    assert b == pytest.approx(-2.61, abs=1e-6)
+    peak, _, _ = steepest_point(5.0, -3.0, -2.0)
+    assert peak / norm > 1e4
+
+
+def test_the_paper_window_misses_the_wall_at_w_5_4():
+    """At w = 5.4 the wall sits outside the window figure 6 draws."""
+    norm, b, _ = steepest_point(5.4, -2.8, -2.0)
+    assert norm == pytest.approx(1.355472e-01, rel=1e-3)
+    assert b == pytest.approx(-2.80816320, abs=1e-6)
+    widened, wide_b, _ = steepest_point(5.4, -3.0, -2.0)
+    assert wide_b < -2.8
+    assert widened / norm > 1e6
 
 
 # --- ch03_clipping.py -------------------------------------------------------
@@ -198,13 +221,66 @@ def test_clip_norm_is_a_no_op_below_the_threshold():
     assert torch.equal(clipped, gradient)
 
 
+def test_clip_parameters_clips_slightly_under_the_threshold():
+    """torch does not implement algorithm 1 exactly, and the gap is measurable.
+
+    `clip_grad_norm_` scales by `max_norm / (total_norm + 1e-6)` rather than by
+    `max_norm / total_norm`. The epsilon guards a division by zero and costs a
+    result a hair under the threshold: for a gradient of norm sqrt(50), the
+    clipped norm is 0.9999998585786636 instead of 1.
+
+    Asserted rather than tolerated, because the chapter tells readers to call
+    the library function after showing them the four lines of the paper, and
+    the two are not quite the same arithmetic.
+    """
+    p1 = torch.tensor([1.0, 2.0], dtype=torch.float64, requires_grad=True)
+    p2 = torch.tensor([3.0, 4.0], dtype=torch.float64, requires_grad=True)
+    (p1.sum() * 3.0 + p2.sum() * 4.0).backward()
+    flat = torch.cat([p1.grad.flatten(), p2.grad.flatten()])
+    before = torch.linalg.vector_norm(flat).item()
+    assert before == pytest.approx(50.0**0.5, rel=1e-12)
+
+    faithful, fired = clip_norm(flat, 1.0)
+    assert fired
+    assert torch.linalg.vector_norm(faithful).item() == pytest.approx(1.0, rel=1e-12)
+
+    seen = clip_parameters([p1, p2], 1.0)
+    assert seen == pytest.approx(before, rel=1e-12)
+    got = torch.cat([p1.grad.flatten(), p2.grad.flatten()])
+    after = torch.linalg.vector_norm(got).item()
+    assert after == pytest.approx(0.9999998585786636, rel=1e-12)
+    assert after < 1.0
+    assert 1.0 - after == pytest.approx(1e-6 / before, rel=1e-3)
+
+    # Direction is what both versions preserve, and they preserve it equally.
+    cosine = torch.dot(got, flat) / (
+        torch.linalg.vector_norm(got) * torch.linalg.vector_norm(flat)
+    )
+    assert cosine.item() == pytest.approx(1.0, rel=1e-12)
+
+
+def test_the_two_experiments_use_the_same_peak():
+    """ch03_surface.py reports a point and ch03_clipping.py steps from it.
+
+    They used to disagree in the ninth decimal, because one of them pasted the
+    constant instead of computing it, and the chapter printed two different
+    costs for one advertised point. Both now call steepest_point.
+    """
+    _, b_surface, cost_surface = steepest_point(5.0, -3.0, -2.0)
+    _, b_clipping, cost_clipping = steepest_point(5.0, -3.0, -2.0)
+    assert b_surface == b_clipping
+    assert cost_surface == cost_clipping
+    assert cost_surface == pytest.approx(0.14960413, rel=1e-6)
+
+
 def test_the_unclipped_step_leaves_the_surface():
     """One step at the wall, without the clip, and where it lands."""
-    _, grad_w, grad_b = cost_and_gradient(5.0, -2.6123413579)
+    _, peak_b, _ = steepest_point(5.0, -3.0, -2.0)
+    _, grad_w, grad_b = cost_and_gradient(5.0, peak_b)
     w_after = 5.0 - 0.1 * grad_w
-    b_after = -2.6123413579 - 0.1 * grad_b
-    assert w_after == pytest.approx(362.77215206, rel=1e-3)
-    assert b_after == pytest.approx(572.49753715, rel=1e-3)
+    b_after = peak_b - 0.1 * grad_b
+    assert w_after == pytest.approx(362.77214318, rel=1e-3)
+    assert b_after == pytest.approx(572.49753848, rel=1e-3)
     cost_after, _, _ = cost_and_gradient(w_after, b_after)
     # The unit saturates, so sigmoid(x_50) is 1 and the cost is exactly
     # (1 - 0.7)^2. The step did not find a worse minimum; it left the problem.
@@ -219,13 +295,14 @@ def test_the_unclipped_step_leaves_the_surface():
     ],
 )
 def test_the_clipped_step_stays_and_improves(threshold, w_after, b_after, cost_after):
-    cost_before, grad_w, grad_b = cost_and_gradient(5.0, -2.6123413579)
+    _, peak_b, _ = steepest_point(5.0, -3.0, -2.0)
+    cost_before, grad_w, grad_b = cost_and_gradient(5.0, peak_b)
     gradient = torch.tensor([grad_w, grad_b], dtype=torch.float64)
     clipped, fired = clip_norm(gradient, threshold)
     assert fired
     step = clipped * 0.1
     new_w = 5.0 - step[0].item()
-    new_b = -2.6123413579 - step[1].item()
+    new_b = peak_b - step[1].item()
     assert new_w == pytest.approx(w_after, rel=1e-6)
     assert new_b == pytest.approx(b_after, rel=1e-6)
     measured, _, _ = cost_and_gradient(new_w, new_b)

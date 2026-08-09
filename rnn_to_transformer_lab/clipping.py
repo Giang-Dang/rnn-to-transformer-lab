@@ -39,6 +39,22 @@ def clip_norm(gradient: torch.Tensor, threshold: float) -> tuple[torch.Tensor, b
     return gradient, False
 
 
+def clip_parameters(parameters, threshold: float) -> float:
+    """What production code should call, kept here so the book can quote it.
+
+    `torch.nn.utils.clip_grad_norm_` is algorithm 1 applied to a whole
+    parameter list treated as one vector. It rescales every `.grad` in place
+    and returns the norm it saw before clipping. Call it after
+    `loss.backward()` and before `optimizer.step()`.
+
+    `clip_norm` above is the same arithmetic on a bare tensor, so that chapter
+    3 can show the two lines that matter without building an optimizer around
+    them. This function exists so that the one line a reader should actually
+    write is real code in this repo rather than a snippet in the prose.
+    """
+    return torch.nn.utils.clip_grad_norm_(parameters, max_norm=threshold).item()
+
+
 def step_with_clipping(
     parameters: torch.Tensor,
     gradient: torch.Tensor,
