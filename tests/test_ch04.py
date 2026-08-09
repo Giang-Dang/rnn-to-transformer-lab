@@ -6,9 +6,13 @@ deterministic computations on fixed seeds.
 
 Two assertions here are exact rather than approximate, and they are meant to
 be. The truncated carousel Jacobian is the identity matrix, not a matrix close
-to it, and the 1997 state update contains no forget gate, so the increment is
-exactly the gated cell input. Both are architectural facts; a tolerance on
-either would be hiding a bug rather than absorbing float noise.
+to it, and a cell whose input gate is shut carries its state bit for bit rather
+than nearly. Both are architectural facts, and a tolerance on either would hide
+a bug rather than absorb float noise.
+
+What is deliberately *not* asserted exactly: c_t - c_{t-1} against i_t g(a_c).
+That one is true of the architecture and false of floating point, because
+(a + b) - a is not b. The exact form of the same claim is the shut-gate test.
 """
 
 from __future__ import annotations
@@ -70,7 +74,7 @@ def test_squashing_functions_are_scaled_logistics():
 
 
 def test_the_1997_update_has_no_forget_gate():
-    """c_t = c_{t-1} + i_t g(z_c): the self-connection is a fixed 1.0.
+    """c_t = c_{t-1} + i_t g(a_c): the self-connection is a fixed 1.0.
 
     The increment is compared with a tolerance rather than bit-exactly,
     because (a + b) - a is not b in floating point. The coefficient on
@@ -81,7 +85,7 @@ def test_the_1997_update_has_no_forget_gate():
     for t in range(1, len(states)):
         increment = states[t].c - states[t - 1].c
         assert torch.allclose(
-            increment, states[t].i * g_in(states[t].z_c), rtol=0, atol=1e-14
+            increment, states[t].i * g_in(states[t].a_c), rtol=0, atol=1e-14
         )
 
 
@@ -119,7 +123,7 @@ def test_the_forget_gate_variant_does_have_one():
     # previous state is halved every step rather than carried.
     for t in range(1, len(states)):
         assert torch.allclose(states[t].f, torch.full((4,), 0.5, dtype=torch.float64))
-        expected = 0.5 * states[t - 1].c + states[t].i * g_in(states[t].z_c)
+        expected = 0.5 * states[t - 1].c + states[t].i * g_in(states[t].a_c)
         assert torch.allclose(states[t].c, expected)
 
 

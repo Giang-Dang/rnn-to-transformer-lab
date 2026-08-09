@@ -11,7 +11,7 @@ written the way the paper writes them:
 
 * **There is no forget gate.** The 1997 state update is
 
-      c_t = c_{t-1} + i_t g_in(z_c(t))
+      c_t = c_{t-1} + i_t g_in(a_c(t))
 
   with a self-connection fixed at 1.0. The forget gate is Gers, Schmidhuber
   and Cummins (2000), three years later, and `LstmForget` below is that
@@ -29,9 +29,17 @@ Topology. The 1997 paper's hidden layer is fully connected: a gate receives
 connections from every memory cell *and* every other gate unit. What the field
 converged on instead, and what `torch.nn.LSTM` implements, is a layer form
 where all three blocks read the same h_{t-1}. This module implements the layer
-form and says so, because that is the thing a reader will meet; `topologies`
-below counts the parameters of both, since the two counts are the difference
-between the paper's own "factor of 3^2" and the factor of 4 usually quoted.
+form and says so, because that is the thing a reader will meet;
+`layer_parameters` and `fully_connected_parameters` below count both, since the
+difference between them is the difference between the paper's own "factor of
+3^2" and the factor of 4 usually quoted.
+
+Notation. The book carries one notation for all sixteen chapters, and in it
+`a_t` is a pre-activation (chapter 1, and decision 25 of the book's SPEC). A
+gate's net input is a pre-activation, so the three of them are `a_i`, `a_o` and
+`a_c` here. The paper writes `net_in_j`, `net_out_j` and `net_c_j`; Gers et al.
+(2002) write `z_in`, `z_out` and `z_c`. Appendix A of the book carries the
+mapping.
 """
 
 from __future__ import annotations
@@ -79,14 +87,14 @@ class LstmState:
     h: torch.Tensor
     i: torch.Tensor
     o: torch.Tensor
-    z_i: torch.Tensor
-    z_o: torch.Tensor
-    z_c: torch.Tensor
+    a_i: torch.Tensor
+    a_o: torch.Tensor
+    a_c: torch.Tensor
 
 
 @dataclass
 class Lstm1997:
-    """c_t = c_{t-1} + i_t g_in(z_c), h_t = o_t g_out(c_t). No forget gate.
+    """c_t = c_{t-1} + i_t g_in(a_c), h_t = o_t g_out(c_t). No forget gate.
 
     A dataclass of plain tensors, matching `PlainRNN`: chapter 4 reaches in and
     sets weights by hand as often as it trains them, and an nn.Module would add
@@ -129,14 +137,14 @@ class Lstm1997:
         shape (batch, n_input). The weight shapes are (n_hidden, n_input)
         either way, which is the layout the Jacobian helpers below assume.
         """
-        z_i = x @ self.w_xi.T + h_prev @ self.w_hi.T + self.b_i
-        z_o = x @ self.w_xo.T + h_prev @ self.w_ho.T + self.b_o
-        z_c = x @ self.w_xc.T + h_prev @ self.w_hc.T + self.b_c
-        i = torch.sigmoid(z_i)
-        o = torch.sigmoid(z_o)
-        c = c_prev + i * g_in(z_c)
+        a_i = x @ self.w_xi.T + h_prev @ self.w_hi.T + self.b_i
+        a_o = x @ self.w_xo.T + h_prev @ self.w_ho.T + self.b_o
+        a_c = x @ self.w_xc.T + h_prev @ self.w_hc.T + self.b_c
+        i = torch.sigmoid(a_i)
+        o = torch.sigmoid(a_o)
+        c = c_prev + i * g_in(a_c)
         h = o * g_out(c)
-        return LstmState(c=c, h=h, i=i, o=o, z_i=z_i, z_o=z_o, z_c=z_c)
+        return LstmState(c=c, h=h, i=i, o=o, a_i=a_i, a_o=a_o, a_c=a_c)
 
     def unroll(self, inputs: torch.Tensor, truncate: bool = False) -> list[LstmState]:
         """Run over `inputs` of shape (n_steps, n_input), from a zero state.
@@ -149,7 +157,7 @@ class Lstm1997:
         `truncate=True` is the paper's learning rule rather than a shortcut.
         Detaching h_{t-1} where the three net inputs are formed is exactly the
         three `~_tr 0` substitutions of appendix A.1: an error arriving at
-        z_i, z_o or z_c still reaches the weights on those connections, because
+        a_i, a_o or a_c still reaches the weights on those connections, because
         the product with h_{t-1} is still taken, but it is not carried further
         back through h. What is deliberately not detached is c_{t-1}: that path
         is the carousel, and it is the one thing the truncation must leave
@@ -159,7 +167,7 @@ class Lstm1997:
         shape = (*inputs.shape[1:-1], self.n_hidden)
         zero = torch.zeros(shape, dtype=dtype)
         states = [
-            LstmState(c=zero, h=zero, i=zero, o=zero, z_i=zero, z_o=zero, z_c=zero)
+            LstmState(c=zero, h=zero, i=zero, o=zero, a_i=zero, a_o=zero, a_c=zero)
         ]
         for t in range(inputs.shape[0]):
             h_prev = states[-1].h.detach() if truncate else states[-1].h
@@ -169,11 +177,11 @@ class Lstm1997:
     def cec_jacobian_truncated(self) -> torch.Tensor:
         """d c_t / d c_{t-1} under the paper's truncation. Exactly the identity.
 
-        Truncated backprop replaces d z_i(t) / d h(t-1), d z_o(t) / d h(t-1)
-        and d z_c(t) / d h(t-1) by zero (appendix A.1, the three `~_tr 0`
+        Truncated backprop replaces d a_i(t) / d h(t-1), d a_o(t) / d h(t-1)
+        and d a_c(t) / d h(t-1) by zero (appendix A.1, the three `~_tr 0`
         lines). With those gone, the only surviving path from c_{t-1} to c_t in
 
-            c_t = c_{t-1} + i_t g_in(z_c(t))
+            c_t = c_{t-1} + i_t g_in(a_c(t))
 
         is the first term, whose derivative is 1. That is the paper's equation
         (30), and it is what "constant error carousel" means: not that the
@@ -195,8 +203,8 @@ class Lstm1997:
         diagonal,
 
             d c_t / d c_{t-1}
-              = I + [ diag(g_in(z_c)) diag(f'(z_i)) W_hi
-                    + diag(i_t) diag(g_in'(z_c)) W_hc ] D,
+              = I + [ diag(g_in(a_c)) diag(f'(a_i)) W_hi
+                    + diag(i_t) diag(g_in'(a_c)) W_hc ] D,
 
             D = diag( o_{t-1} * g_out'(c_{t-1}) ).
 
@@ -207,8 +215,8 @@ class Lstm1997:
         """
         d = torch.diag(previous.o * g_out_prime(previous.c))
         leaving = (
-            torch.diag(g_in(current.z_c)) @ torch.diag(sigmoid_prime(current.z_i)) @ self.w_hi
-            + torch.diag(current.i) @ torch.diag(g_in_prime(current.z_c)) @ self.w_hc
+            torch.diag(g_in(current.a_c)) @ torch.diag(sigmoid_prime(current.a_i)) @ self.w_hi
+            + torch.diag(current.i) @ torch.diag(g_in_prime(current.a_c)) @ self.w_hc
         )
         eye = torch.eye(self.n_hidden, dtype=self.w_hi.dtype)
         return eye + leaving @ d
@@ -218,7 +226,7 @@ class Lstm1997:
 class LstmForget(Lstm1997):
     """Gers, Schmidhuber and Cummins (2000): the self-connection is learned.
 
-    c_t = f_t c_{t-1} + i_t g_in(z_c), with f_t a fourth gate. Subclassing
+    c_t = f_t c_{t-1} + i_t g_in(a_c), with f_t a fourth gate. Subclassing
     rather than copying, because the point of the bridge box is that the 2000
     cell is the 1997 cell with one gate added and the fixed 1.0 replaced.
 
@@ -238,16 +246,16 @@ class LstmForget(Lstm1997):
     def step(
         self, c_prev: torch.Tensor, h_prev: torch.Tensor, x: torch.Tensor
     ) -> LstmState:
-        z_i = x @ self.w_xi.T + h_prev @ self.w_hi.T + self.b_i
-        z_o = x @ self.w_xo.T + h_prev @ self.w_ho.T + self.b_o
-        z_c = x @ self.w_xc.T + h_prev @ self.w_hc.T + self.b_c
-        z_f = x @ self.w_xf.T + h_prev @ self.w_hf.T + self.b_f
-        i = torch.sigmoid(z_i)
-        o = torch.sigmoid(z_o)
-        f = torch.sigmoid(z_f)
-        c = f * c_prev + i * g_in(z_c)
+        a_i = x @ self.w_xi.T + h_prev @ self.w_hi.T + self.b_i
+        a_o = x @ self.w_xo.T + h_prev @ self.w_ho.T + self.b_o
+        a_c = x @ self.w_xc.T + h_prev @ self.w_hc.T + self.b_c
+        a_f = x @ self.w_xf.T + h_prev @ self.w_hf.T + self.b_f
+        i = torch.sigmoid(a_i)
+        o = torch.sigmoid(a_o)
+        f = torch.sigmoid(a_f)
+        c = f * c_prev + i * g_in(a_c)
         h = o * g_out(c)
-        state = LstmState(c=c, h=h, i=i, o=o, z_i=z_i, z_o=z_o, z_c=z_c)
+        state = LstmState(c=c, h=h, i=i, o=o, a_i=a_i, a_o=a_o, a_c=a_c)
         state.f = f  # type: ignore[attr-defined]
         return state
 
