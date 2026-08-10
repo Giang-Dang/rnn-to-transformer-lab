@@ -15,9 +15,24 @@ from __future__ import annotations
 
 import platform
 import random
+import sys
 
 import numpy as np
 import torch
+
+
+def utf8_stdout() -> None:
+    """Print UTF-8 whatever the console claims it can take.
+
+    From chapter 5 the experiments print Vietnamese, and on Windows the default
+    console encoding is cp1252, which cannot represent it. `verify.py` captures
+    stdout through a pipe, where Python picks the locale encoding rather than
+    the console's, so this fails the same way there. Call it before the first
+    print in any script whose output is not pure ASCII.
+    """
+    for stream in (sys.stdout, sys.stderr):
+        if hasattr(stream, "reconfigure"):
+            stream.reconfigure(encoding="utf-8")
 
 
 def seed_everything(seed: int = 0) -> None:

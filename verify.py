@@ -34,6 +34,15 @@ ROOT = Path(__file__).resolve().parent
 #: together. The budget is set at roughly three times the measured time so a
 #: slower machine still passes. See the book's SPEC open items; if this grows
 #: further the fix belongs to chapter 2, not to chapter 3.
+#:
+#: Chapters 1 to 4 hold to 60 seconds per experiment, because each of their
+#: scripts probes a computation that is fixed before the script starts. From
+#: chapter 5 a script trains several models in order to compare them, and 60
+#: seconds stops being a property of the script and becomes a property of how
+#: many models it needs: the reversal table is six trainings, and no amount of
+#: care makes six trainings fit one training's budget. So the rule from here is
+#: 60 seconds per model trained, with a floor of 30 for a script that trains
+#: none. What protects the reader is BUDGET_TOTAL below, and that is unchanged.
 ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     ("chapter 1 verify", "ch01", ["-c", "from rnn_to_transformer_lab import verify; verify()"], 30.0),
     ("chapter 2 verify", "ch02", ["-c", "from rnn_to_transformer_lab.ch02_symptoms import verify; verify()"], 300.0),
@@ -50,16 +59,30 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     ("experiments/ch04_truncation.py", "ch04", ["experiments/ch04_truncation.py"], 60.0),
     ("experiments/ch04_params.py", "ch04", ["experiments/ch04_params.py"], 60.0),
     ("experiments/ch04_adding.py", "ch04", ["experiments/ch04_adding.py"], 60.0),
+    ("chapter 5 tests", "ch05", ["-m", "pytest", "-q", "tests/test_ch05.py"], 120.0),
+    ("experiments/ch05_corpus.py", "ch05", ["experiments/ch05_corpus.py"], 30.0),
+    ("experiments/ch05_bottleneck.py", "ch05", ["experiments/ch05_bottleneck.py"], 360.0),
+    ("experiments/ch05_reverse.py", "ch05", ["experiments/ch05_reverse.py"], 360.0),
+    ("experiments/ch05_search.py", "ch05", ["experiments/ch05_search.py"], 180.0),
 )
 
 BUDGET_TOTAL = 600.0
 
 
 def run(label: str, argv: list[str], budget: float) -> tuple[bool, bool, float]:
-    """Run one item. Returns (passed, inside budget, elapsed)."""
+    """Run one item. Returns (passed, inside budget, elapsed).
+
+    `encoding` is not optional and not cosmetic. From chapter 5 the experiments
+    print Vietnamese, and `text=True` alone decodes the child's stdout with the
+    locale encoding, which is cp1252 on Windows. The child having already been
+    told to *write* UTF-8 does not help: this is the reading end, and it fails
+    with a UnicodeDecodeError raised on a reader thread, so the traceback names
+    `threading` and `subprocess` and nothing in this repo.
+    """
     started = time.perf_counter()
     completed = subprocess.run(
-        [sys.executable, *argv], cwd=ROOT, capture_output=True, text=True, check=False
+        [sys.executable, *argv], cwd=ROOT, capture_output=True, text=True,
+        encoding="utf-8", errors="replace", check=False,
     )
     elapsed = time.perf_counter() - started
     ok = completed.returncode == 0
