@@ -160,7 +160,9 @@ class Seq2Seq(nn.Module):
         """How many real numbers the decoder gets, whatever the sentence."""
         return 2 * self.n_hidden
 
-    def encode(self, source: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
+    def encode(
+        self, source: torch.Tensor
+    ) -> tuple[torch.Tensor, torch.Tensor]:
         """Read (steps, batch) of source indices; return the state at the last real token.
 
         The state is frozen wherever the input is padding, so a short sentence
@@ -181,7 +183,9 @@ class Seq2Seq(nn.Module):
         return state
 
     def decode_forced(
-        self, context: tuple[torch.Tensor, torch.Tensor], target_in: torch.Tensor
+        self,
+        context: tuple[torch.Tensor, torch.Tensor],
+        target_in: torch.Tensor,
     ) -> torch.Tensor:
         """Teacher forcing: (steps, batch) of target indices in, logits out."""
         projected = self.decoder.project(self.target_embedding(target_in))

@@ -78,8 +78,9 @@ ANIMAL_ADJECTIVES = (
 )
 OBJECT_ADJECTIVES = ANIMAL_ADJECTIVES + (("old", "cũ"), ("new", "mới"))
 
-#: A verb is one or two tokens on each side and they do not line up, so target
-#: length is not a function of source length.
+#: Every English verb is exactly one token; the Vietnamese side is one or two.
+#: That asymmetry, and the classifier above, are why target length is not a
+#: function of source length.
 VERBS = (
     ("sees", ("nhìn", "thấy")),
     ("finds", ("tìm", "thấy")),
