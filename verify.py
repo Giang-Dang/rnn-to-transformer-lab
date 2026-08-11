@@ -112,9 +112,10 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
 #: warned that it might. Its five items add about 95s: 2.4s of tests, 1.5s for
 #: the scaling probe, 0.1s for the positional one, 26.1s for the mask, and
 #: 65.2s for the corpus table. That is well inside the fifth of the budget left
-#: spare at tag ch06, and it is so because four of the five train nothing at
-#: all. A chapter whose claims are about a computation rather than about a
-#: trained model is cheap to verify, and chapter 7's are.
+#: spare at tag ch06. Three of the five train nothing at all - the tests, the
+#: scaling probe and the positional one - and the two that do train are the
+#: whole of the 91s. A chapter whose claims are mostly about a computation
+#: rather than about a trained model is cheap to verify, and chapter 7's are.
 BUDGET_TOTAL = 900.0
 
 
