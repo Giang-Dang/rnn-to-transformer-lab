@@ -42,7 +42,8 @@ ROOT = Path(__file__).resolve().parent
 #: many models it needs: the reversal table is six trainings, and no amount of
 #: care makes six trainings fit one training's budget. So the rule from here is
 #: 60 seconds per model trained, with a floor of 30 for a script that trains
-#: none. What protects the reader is BUDGET_TOTAL below, and that is unchanged.
+#: none. What protects the reader is BUDGET_TOTAL below, and chapter 6 is where
+#: that number finally had to move; the note on it says why and by how much.
 ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     ("chapter 1 verify", "ch01", ["-c", "from rnn_to_transformer_lab import verify; verify()"], 30.0),
     ("chapter 2 verify", "ch02", ["-c", "from rnn_to_transformer_lab.ch02_symptoms import verify; verify()"], 300.0),
@@ -64,9 +65,37 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     ("experiments/ch05_bottleneck.py", "ch05", ["experiments/ch05_bottleneck.py"], 360.0),
     ("experiments/ch05_reverse.py", "ch05", ["experiments/ch05_reverse.py"], 360.0),
     ("experiments/ch05_search.py", "ch05", ["experiments/ch05_search.py"], 180.0),
+    ("chapter 6 tests", "ch06", ["-m", "pytest", "-q", "tests/test_ch06.py"], 120.0),
+    ("experiments/ch06_gradient.py", "ch06", ["experiments/ch06_gradient.py"], 30.0),
+    ("experiments/ch06_alignment.py", "ch06", ["experiments/ch06_alignment.py"], 60.0),
+    ("experiments/ch06_width.py", "ch06", ["experiments/ch06_width.py"], 360.0),
+    ("experiments/ch06_encoder.py", "ch06", ["experiments/ch06_encoder.py"], 300.0),
 )
 
-BUDGET_TOTAL = 600.0
+#: Raised from 600 to 900 in the chapter 6 session, from the measurement rather
+#: than because a run went over.
+#:
+#: 600 was set when this repo ended at chapter 3 and nothing in it trained a
+#: translation model. Chapters 5 and 6 each add several trainings and the
+#: number was never re-derived: it survived chapter 5 with about forty seconds
+#: to spare on one machine, which is not headroom, it is luck. What makes that
+#: visible is the spread between runs rather than any single total. Three whole
+#: runs at tag ch05 came in at 557.52s, 495.51s and 487.27s - seventy seconds
+#: of range on identical code, because these are wall-clock numbers from a
+#: laptop that is also doing other things.
+#:
+#: Measured at tag ch06 against the 487.27s baseline: chapter 6 adds 5.92s of
+#: tests, 0.34s for the gradient profile, 22.41s for the alignment run, 96.64s
+#: for the encoder ablation and the width sweep on top, for a total near 715s.
+#: 900 leaves roughly a fifth of the budget spare, which is the spread above
+#: with room over.
+#:
+#: What is deliberately *not* changed is what the budget is for. Decision 13
+#: promises the reader that every experiment finishes on a laptop with no
+#: graphics card in minutes, and 900 seconds is still minutes. Before raising
+#: it again, the question to ask is not whether the run fits but whether a
+#: reader would still sit through one.
+BUDGET_TOTAL = 900.0
 
 
 def run(label: str, argv: list[str], budget: float) -> tuple[bool, bool, float]:

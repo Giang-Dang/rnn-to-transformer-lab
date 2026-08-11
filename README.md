@@ -35,6 +35,7 @@ environment, and that is the one to check them against.
 | 03 | `ch03` | Jacobian products through time; spectral radius against spectral norm; the error surface of the single-unit model and the wall in it; norm clipping as algorithm 1; the norm-preserving regularizer |
 | 04 | `ch04` | The 1997 memory cell with no forget gate; the constant error carousel and its derivative; the input weight conflict solved in closed form; what the paper's truncation costs; parameter counts against the plain layer; the adding problem at lag 100 |
 | 05 | `ch05` | The encoder-decoder of Sutskever et al.; a generated English-Vietnamese toy corpus; the fixed-length context vector measured by shrinking it; source reversal; beam search; ensembling |
+| 06 | `ch06` | Additive attention as Bahdanau et al. define it, on the same cell and corpus as chapter 5; the bidirectional encoder and a parameter-matched ablation of it; chapter 5's width sweep run again with attention; how far a gradient reaches back into the source in each model; the alignment matrix, and the rate at which it crosses |
 
 Check out a tag to get exactly the code a chapter quotes:
 
@@ -57,6 +58,7 @@ rnn_to_transformer_lab/
   regularizer.py     equation 9, the remedy that did not survive
   lstm.py            the 1997 memory cell, the 2000 forget gate, parameter counts
   toy_corpus.py      the generated English-Vietnamese corpus chapters 5 to 8 use
+  attention.py       additive attention, the bidirectional encoder, chapter 6
   seq2seq.py         the encoder-decoder, greedy and beam decoding, ensembling
 experiments/         one script per set of numbers a chapter prints
 tests/               those numbers, asserted
