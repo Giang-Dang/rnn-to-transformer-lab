@@ -101,14 +101,16 @@ class BiEncoder(nn.Module):
         """
         steps = source.shape[0]
         live = (source != PAD_INDEX).unsqueeze(-1).to(embedded.dtype)
+        mask = source != PAD_INDEX
 
-        ahead = torch.stack(self._scan(self.ahead, embedded, live, range(steps)))
+        ahead = self._scan(self.ahead, embedded, live, range(steps))
         if self.back is None:
-            return ahead, source != PAD_INDEX
-        back = torch.stack(
-            self._scan(self.back, embedded, live, reversed(range(steps)))
-        )
-        return torch.cat([ahead, back], dim=-1), source != PAD_INDEX
+            return torch.stack(ahead), mask
+
+        backwards = reversed(range(steps))
+        back = self._scan(self.back, embedded, live, backwards)
+        stacked = [torch.stack(ahead), torch.stack(back)]
+        return torch.cat(stacked, dim=-1), mask
 
     @staticmethod
     def _scan(layer: LstmLayer, embedded, live, order) -> list[torch.Tensor]:
@@ -174,7 +176,8 @@ class AdditiveAttention(nn.Module):
         mask: torch.Tensor,
     ) -> torch.Tensor:
         """alpha_ij for one target step: (steps, batch), summing to 1 down dim 0."""
-        scores = self.v_a(torch.tanh(self.w_a(state) + projected)).squeeze(-1)
+        hidden = torch.tanh(self.w_a(state) + projected)
+        scores = self.v_a(hidden).squeeze(-1)
         scores = scores.masked_fill(~mask, float("-inf"))
         return torch.softmax(scores, dim=0)
 
@@ -225,18 +228,24 @@ class AttentionSeq2Seq(nn.Module):
 
     def encode(self, source: torch.Tensor):
         """Annotations, mask, precomputed U_a h_j, and the initial decoder state."""
-        annotations, mask = self.encoder(source, self.source_embedding(source))
+        embedded = self.source_embedding(source)
+        annotations, mask = self.encoder(source, embedded)
         projected = self.attention.precompute(annotations)
         h_0 = torch.tanh(self.bridge(self.encoder.summary(annotations)))
         state = (torch.zeros_like(h_0), h_0)
         return annotations, mask, projected, state
 
-    def step(self, embedded_word, state, annotations, mask, projected):
-        """One decoder step: score, average, then advance. Returns state and alpha."""
+    def step(self, word, state, annotations, mask, projected):
+        """One decoder step: score, average, then advance.
+
+        The order is the paper's and it is the part to read slowly. The score
+        is taken against `state`, which at this point is s_{i-1}: the context
+        for step i is chosen before step i runs. Luong et al. reverse it.
+        """
         alpha = self.attention.weights(state[1], projected, mask)
         context = self.attention.context(alpha, annotations)
-        state = self.decoder.step(torch.cat([embedded_word, context], dim=-1), state)
-        return state, alpha
+        merged = torch.cat([word, context], dim=-1)
+        return self.decoder.step(merged, state), alpha
 
     def decode_forced(self, encoded, target_in: torch.Tensor) -> torch.Tensor:
         annotations, mask, projected, state = encoded
