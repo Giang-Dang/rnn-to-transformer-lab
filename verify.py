@@ -70,6 +70,18 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     ("experiments/ch06_alignment.py", "ch06", ["experiments/ch06_alignment.py"], 60.0),
     ("experiments/ch06_width.py", "ch06", ["experiments/ch06_width.py"], 360.0),
     ("experiments/ch06_encoder.py", "ch06", ["experiments/ch06_encoder.py"], 300.0),
+    ("chapter 7 tests", "ch07", ["-m", "pytest", "-q", "tests/test_ch07.py"], 120.0),
+    ("experiments/ch07_scaling.py", "ch07", ["experiments/ch07_scaling.py"], 30.0),
+    ("experiments/ch07_position.py", "ch07", ["experiments/ch07_position.py"], 30.0),
+    ("experiments/ch07_mask.py", "ch07", ["experiments/ch07_mask.py"], 120.0),
+    # Two models, but the second is trained for 56 epochs against the shared
+    # recipe's 14, which is four trainings' worth of work in one row of the
+    # table. Decision 37's "60 seconds per model" is a rule about models at the
+    # shared epoch count; a script that deliberately trains past it scales with
+    # the epochs, and 180 is roughly three times the 65.18s measured at tag
+    # ch07. The chapter's whole argument is that the extra epochs are the
+    # finding, so this is not a budget that can be bought back by training less.
+    ("experiments/ch07_corpus.py", "ch07", ["experiments/ch07_corpus.py"], 180.0),
 )
 
 #: Raised from 600 to 900 in the chapter 6 session, from the measurement rather
@@ -95,6 +107,14 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
 #: graphics card in minutes, and 900 seconds is still minutes. Before raising
 #: it again, the question to ask is not whether the run fits but whether a
 #: reader would still sit through one.
+#:
+#: Chapter 7 did not need it moved, which is worth recording because the SPEC
+#: warned that it might. Its five items add about 95s: 2.4s of tests, 1.5s for
+#: the scaling probe, 0.1s for the positional one, 26.1s for the mask, and
+#: 65.2s for the corpus table. That is well inside the fifth of the budget left
+#: spare at tag ch06, and it is so because four of the five train nothing at
+#: all. A chapter whose claims are about a computation rather than about a
+#: trained model is cheap to verify, and chapter 7's are.
 BUDGET_TOTAL = 900.0
 
 
