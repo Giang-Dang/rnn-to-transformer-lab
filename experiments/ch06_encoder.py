@@ -59,7 +59,11 @@ def main() -> None:
           f"greedy decoding")
     print()
 
-    print("encoder        d_h  source    params  loss     exact    short    long")
+    # No loss column, unlike the other two chapter 6 tables. The book sets this
+    # one inside a boxed note whose measure is about three columns narrower
+    # than the page's, and with the loss column the widest row ran two columns
+    # over it and wrapped. Nothing in the chapter reads this table's loss.
+    print("encoder        d_h  source    params  exact   short   long")
     for label, width, bidirectional, reverse in RUNS:
         model, losses = attention.train_one(
             SEED, reverse_source=reverse, n_hidden=width,
@@ -74,8 +78,8 @@ def main() -> None:
         n_params = sum(p.numel() for p in model.parameters())
         print(
             f"{label:<14} {width:<4} {'reversed' if reverse else 'raw':<9} "
-            f"{n_params:<7} {sum(losses[-20:]) / 20:<8.4f} {accuracy:<8.4f} "
-            f"{sum(short) / len(short):<8.4f} {sum(long) / len(long):.4f}"
+            f"{n_params:<7} {accuracy:<7.4f} "
+            f"{sum(short) / len(short):<7.4f} {sum(long) / len(long):.4f}"
         )
 
     print()
