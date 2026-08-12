@@ -1,0 +1,33 @@
+python 3.13.12 | torch 2.11.0+cpu | numpy 2.3.5 | Windows AMD64
+
+CIFAR-10, Krizhevsky 2009
+train (50000, 3, 32, 32)  50,000 labels, 5,000 per class
+test  (10000, 3, 32, 32)  10,000 labels, 1,000 per class
+classes 10: airplane .. truck
+
+1. four models, before training
+
+model         parameters  vs CNN  locality  sharing
+CNN           66,570      1.0000  yes       yes
+ViT matched   66,095      0.9929  no        yes
+MLP matched   64,753      0.9727  no        no
+MLP wide      1,578,506   23.7120 no        no
+
+ViT patches are 8x8 RGB pixels: 16 image tokens plus one class token.
+It has learned positions, but no local-attention mask or convolution.
+
+2. ViT test accuracy against training-set size
+   3 seeds, full 10,000-image test split, chapter 10 recipe
+
+n_train  epochs  model         test acc     spread   train acc
+1000     25      ViT matched   0.2948       0.0274   0.5297
+
+4000     14      ViT matched   0.3578       0.0094   0.4306
+
+16000    7       ViT matched   0.4150       0.0210   0.4418
+
+50000    4       ViT matched   0.4576       0.0190   0.4644
+
+The CNN and MLP comparison rows are in ch10_cifar_canonical.txt.
+This output becomes canonical evidence only after this run is committed.
+elapsed 53.84s

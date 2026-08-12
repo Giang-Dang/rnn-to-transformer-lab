@@ -23,6 +23,8 @@ from __future__ import annotations
 import torch
 import torch.nn as nn
 
+from .transformer import EncoderLayer
+
 
 class SmallCNN(nn.Module):
     """Three 3x3 convolutions with pooling between, then a linear classifier.
@@ -78,6 +80,76 @@ class MLP(nn.Module):
 
     def forward(self, x: torch.Tensor) -> torch.Tensor:
         return self.net(x)
+
+
+class SmallViT(nn.Module):
+    """A small Vision Transformer for the chapter 11 CIFAR-10 comparison.
+
+    The architecture keeps only the image-specific choices that ViT itself
+    makes: non-overlapping patches, a learned class token, and learned
+    positional embeddings.  The encoder layers are the post-LN Transformer
+    layers built for chapter 7; the model deliberately has no convolution,
+    locality mask, data augmentation, or residual vision-specific component.
+
+    At its defaults the model has 66,095 trainable parameters, 0.9929 times
+    `SmallCNN`'s 66,570.  That makes the chapter's comparison about the
+    architecture rather than about giving one side more capacity.
+    """
+
+    def __init__(
+        self,
+        *,
+        image_size: int = 32,
+        patch_size: int = 8,
+        channels: int = 3,
+        d_model: int = 88,
+        n_heads: int = 4,
+        n_layers: int = 1,
+        d_ff: int = 85,
+        n_classes: int = 10,
+    ) -> None:
+        super().__init__()
+        if image_size % patch_size:
+            raise ValueError(
+                f"image_size {image_size} is not divisible by patch_size {patch_size}"
+            )
+        self.image_size = image_size
+        self.patch_size = patch_size
+        self.n_patches = (image_size // patch_size) ** 2
+        patch_width = channels * patch_size * patch_size
+        self.patch_embedding = nn.Linear(patch_width, d_model)
+        self.class_token = nn.Parameter(torch.zeros(1, 1, d_model))
+        self.position = nn.Parameter(torch.zeros(1, self.n_patches + 1, d_model))
+        self.layers = nn.ModuleList(
+            EncoderLayer(d_model, n_heads, d_ff) for _ in range(n_layers)
+        )
+        self.norm = nn.LayerNorm(d_model)
+        self.head = nn.Linear(d_model, n_classes)
+
+    def patchify(self, x: torch.Tensor) -> torch.Tensor:
+        """Turn NCHW images into a batch of flattened non-overlapping patches."""
+        if x.ndim != 4:
+            raise ValueError(f"expected NCHW images, got shape {tuple(x.shape)}")
+        _, _, height, width = x.shape
+        if height != self.image_size or width != self.image_size:
+            raise ValueError(
+                f"expected {self.image_size}x{self.image_size} images, got {height}x{width}"
+            )
+        p = self.patch_size
+        return (
+            x.unfold(2, p, p)
+            .unfold(3, p, p)
+            .permute(0, 2, 3, 1, 4, 5)
+            .reshape(x.shape[0], self.n_patches, -1)
+        )
+
+    def forward(self, x: torch.Tensor) -> torch.Tensor:
+        patches = self.patch_embedding(self.patchify(x))
+        cls = self.class_token.expand(x.shape[0], -1, -1)
+        tokens = torch.cat((cls, patches), dim=1) + self.position
+        for layer in self.layers:
+            tokens, _ = layer(tokens, None)
+        return self.head(self.norm(tokens[:, 0]))
 
 
 def count_parameters(model: nn.Module) -> int:

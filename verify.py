@@ -157,6 +157,14 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     ("experiments/ch10_counts.py", "ch10", ["experiments/ch10_counts.py"], 30.0),
     ("experiments/ch10_equivariance.py", "ch10", ["experiments/ch10_equivariance.py"], 30.0),
     ("experiments/ch10_cifar.py", "ch10", ["experiments/ch10_cifar.py"], 450.0),
+    # Chapter 11 adds only the new ViT row. The CNN and MLP reference rows are
+    # the committed chapter-10 canonical run, whose model code and recipe stay
+    # unchanged; rerunning them would spend CPU on values the new chapter does
+    # not alter. Twelve ViT trainings measured 53.84s, so 120s leaves more
+    # than twice the observed time without turning the item into an absence of
+    # a budget.
+    ("chapter 11 tests", "ch11", ["-m", "pytest", "-q", "tests/test_ch11.py"], 120.0),
+    ("experiments/ch11_vit.py", "ch11", ["-m", "experiments.ch11_vit"], 120.0),
 )
 
 #: Raised from 600 to 900 in the chapter 6 session, from the measurement rather
