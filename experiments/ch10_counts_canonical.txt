@@ -1,0 +1,72 @@
+python 3.12.13 | torch 2.11.0+cpu | numpy 2.2.6 | Windows AMD64
+
+1. one layer, three regimes
+   32x32x3 in, 32x32x32 out, 3x3 kernel - the first layer of the
+   CIFAR-10 network this chapter trains
+
+regime  connections  weights      biases  parameters   conn/param
+dense   100,696,064  100,663,296  32,768  100,696,064        1.00
+local   917,504      884,736      32,768  917,504            1.00
+conv    917,504      864          32      896             1024.00
+
+each constraint as a divisor on the parameter count
+  locality alone          109.75
+  sharing, on top        1024.00
+  both together        112384.00
+
+the sharing divisor is the number of spatial positions, 32 x 32.
+locality divides by the ratio of receptive fields; sharing divides
+by however many places the layer looks. they are not equal partners.
+
+2. LeCun et al. 1989, rebuilt from section 3.3
+   paper: 1256 units, 64,660 connections, 9,760 parameters
+
+layer   connections  weights  biases  parameters  conn/param
+H1      19,968       300      768     1,068          18.697
+H2      38,592       2,400    192     2,592          14.889
+H3      5,790        5,760    30      5,790           1.000
+output  310          300      10      310             1.000
+TOTAL   64,660       8,760    1,000   9,760           6.625
+
+H1 is the layer worth reading twice. the paper writes its own
+arithmetic out - 768 biases plus 25 times 12 feature kernels -
+and section 3.3 says units do not share their biases, so:
+  H1 shared weights                300
+  H1 unshared biases               768
+  biases as a share of H1       0.7191
+
+and where the network's parameters actually sit:
+  H1 + H2, the shared layers     3,660
+  H3 + output, fully connected   6,100
+  fully connected share         0.6250
+
+3. LeNet-5, rebuilt from LeCun et al. 1998 section II.B
+   paper: 340,908 connections, 'only 60,000 trainable' parameters
+
+layer   connections  parameters
+C1      122,304      156
+S2      5,880        12
+C3      151,600      1,516
+S4      2,000        32
+C5      48,120       48,120
+F6      10,164       10,164
+output  840          0
+TOTAL   340,908      60,000
+
+60,000 is exact rather than rounded. and the connections close
+only once the output layer is counted: 10 RBF units of 84 inputs
+is 840 connections whose weights the paper fixes by hand and
+never trains, so it lands in one total and not the other. leave
+it out and the parameters are still 60,000 while the connections
+are 340,068, exactly 840 short.
+
+same reading as 1989, and further along:
+  C1..S4, the shared layers      1,716
+  C5 + F6, fully connected      58,284
+  fully connected share         0.9714
+
+the architecture that introduced weight sharing spends 97% of its
+parameters in the layers that do not share. sharing did not make
+the network small - it made the feature extractor small.
+
+elapsed 0.00s

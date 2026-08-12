@@ -1,0 +1,83 @@
+python 3.12.13 | torch 2.11.0+cpu | numpy 2.2.6 | Windows AMD64
+
+1. one convolution, 3x3, shifted by one pixel
+
+padding     max |f(shift x) - shift f(x)|
+circular    0.000e+00
+zeros       1.772e+00
+
+and for zero padding, where that error sits:
+  whole feature map          1.772e+00
+  interior, borders dropped  0.000e+00
+
+the interior is bit-exact. zero padding does not weaken
+equivariance, it breaks it on a two-pixel frame and nowhere else.
+
+2. subsampling: conv then MaxPool2d(2)
+   an input shift of 2 should move the output by 1, so that is
+   what the output is compared against
+
+input shift  output shift  error
+0            0             0.000e+00
+2            1             0.000e+00
+4            2             0.000e+00
+6            3             0.000e+00
+8            4             0.000e+00
+
+exact at every even shift. now the odd ones, which have no output
+shift to be compared against - so the residual below is the best
+any output shift achieves, searched over all of them:
+
+input shift  best output shift  residual  residual/scale
+1            -2                 2.327e+00 0.9439
+3            -3                 2.258e+00 0.9159
+5            -2                 2.258e+00 0.9159
+
+output magnitude 2.4651, so the best any output shift can
+do for an odd input shift is to miss by more than nine tenths of
+that scale. this is not a degradation that grows with distance -
+the layer has nothing at all to say about half of the shifts.
+
+2b. it is the subsampling, not the max
+    Zhang 2019 is usually read as being about max pooling and
+    aliasing. the same test on three ways of halving the grid:
+
+layer           even shift  odd shift  scale   odd/scale
+MaxPool2d(2)    0.000e+00   2.215e+00  2.429   0.912
+AvgPool2d(2)    0.000e+00   1.101e+00  1.343   0.820
+Conv stride 2   0.000e+00   2.968e+00  2.427   1.223
+
+all three are bit-exact on even shifts and all three are wrong by
+the order of the signal on odd ones. there is no max operation in
+the third row at all. so the even/odd split is a property of
+throwing away every other sample, not of the nonlinearity that
+happens to sit next to it.
+
+3. depth multiplies the period
+
+pool layers  total stride  exact at shifts of
+1            2             2
+2            4             4
+3            8             8
+
+a three-pool network on a 32 pixel image is exact at multiples
+of 8, which is 4 of the 32 horizontal shifts, or one in eight.
+LeCun et al. 1989 said this in words about their own two-pixel
+subsampling: the input image is undersampled and some position
+information is eliminated.
+
+4. a convolution written as K^2 attention heads
+   Cordonnier et al. 2020, theorem 1: N_h heads express a
+   sqrt(N_h) x sqrt(N_h) kernel, each head fixed on one offset
+
+kernel  heads  max |heads - conv2d|  output scale  relative
+3x3     9      7.629e-06             26.823        2.84e-07
+5x5     25     1.717e-05             40.610        4.23e-07
+7x7     49     2.670e-05             52.470        5.09e-07
+
+the residual is float32 accumulation order, not a structural gap:
+it tracks the output scale rather than the kernel size. what the
+construction shows is capacity, not learning - the heads here are
+set by hand, and section 4 of the chapter says so on the page.
+
+elapsed 0.04s

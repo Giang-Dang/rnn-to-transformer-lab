@@ -1,0 +1,75 @@
+python 3.12.13 | torch 2.11.0+cpu | numpy 2.2.6 | Windows AMD64
+
+CIFAR-10, Krizhevsky 2009
+train (50000, 3, 32, 32)  50,000 labels, 5,000 per class
+test  (10000, 3, 32, 32)  10,000 labels, 1,000 per class
+classes 10: airplane .. truck
+
+1. the three models
+
+model         parameters  vs CNN  locality  sharing
+CNN           66,570      1.0000  yes       yes
+MLP matched   64,753      0.9727  no        no
+MLP wide      1,578,506   23.7120 no        no
+
+the matched MLP has 21 hidden units. that is what
+66,570 parameters buys when none of them are shared.
+
+2. test accuracy against training-set size
+   3 seeds, full 10,000-image test split, same recipe
+
+n_train  epochs  model         test acc     spread   train acc
+1000     25      CNN           0.4365       0.0326   0.8893
+1000     25      MLP matched   0.3163       0.0176   0.9190
+1000     25      MLP wide      0.3469       0.0236   1.0000
+
+4000     14      CNN           0.5499       0.0102   0.7637
+4000     14      MLP matched   0.3733       0.0042   0.6432
+4000     14      MLP wide      0.3915       0.0133   0.9453
+
+16000    7       CNN           0.6399       0.0197   0.7202
+16000    7       MLP matched   0.4251       0.0152   0.5100
+16000    7       MLP wide      0.4534       0.0120   0.6835
+
+3. what the convolution is worth, by training-set size
+
+n_train  CNN-matched  CNN-wide  CNN spread  widest MLP spread
+1000     0.1202       0.0897    0.0326      0.0236
+4000     0.1767       0.1584    0.0102      0.0133
+16000    0.2148       0.1865    0.0197      0.0152
+
+read the gap columns against the spread columns: a gap narrower
+than the seed spread is not a result. chapter 8's layer-norm table
+is the case where that mattered.
+
+4. the same table read as sample efficiency
+   how many images each MLP needs to reach what the CNN reaches
+
+CNN trained on  reaches  MLP matched needs  MLP wide needs
+1000            0.4365          over 16,000     10,958 (11.0x)
+4000            0.5499          over 16,000        over 16,000
+16000           0.6399          over 16,000        over 16,000
+
+this is the comparison worth printing, and it is not the gap
+column above. the absolute gap is free to grow with data while the
+CNN still reaches a given accuracy on a fraction of the images -
+two different questions, and only the second one is about sample
+efficiency. giving the MLP 24 times the parameters moves the
+multiplier down and does not remove it.
+
+5. shift stability of the trained models
+   fraction of test images whose predicted class changes
+   the seed-0 models from the 16,000-image row, reused
+
+shift  CNN     MLP matched  MLP wide
+1      0.1262  0.2720       0.2370
+2      0.2247  0.4272       0.3951
+4      0.3685  0.5904       0.5386
+8      0.6262  0.7566       0.7067
+
+the CNN is exactly equivariant at a shift of 8 and still changes
+its mind about some images there, because equivariance of the
+features is not invariance of the classifier - the head reads
+position, and a shifted feature map is a different input to it.
+
+elapsed 131.51s

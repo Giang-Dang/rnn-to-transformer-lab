@@ -6,3 +6,9 @@ __pycache__/
 build/
 dist/
 .venv/
+
+# CIFAR-10, fetched and cached by rnn_to_transformer_lab/cifar.py from chapter
+# 10 on. 163 MB of someone else's dataset; it is downloaded, not authored, and
+# the module verifies its MD5 so a fresh clone gets identical bytes. See
+# decision 69 in the book's SPEC for why this repo takes a download at all.
+data/

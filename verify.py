@@ -111,6 +111,36 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     ("chapter 9 tests", "ch09", ["-m", "pytest", "-q", "tests/test_ch09.py"], 120.0),
     ("experiments/ch09_counts.py", "ch09", ["experiments/ch09_counts.py"], 30.0),
     ("experiments/ch09_laws.py", "ch09", ["experiments/ch09_laws.py"], 30.0),
+    # Chapter 10 is the first chapter that needs data this repo cannot
+    # generate, and the first whose experiments touch a real image dataset.
+    # See decision 69 in the book's SPEC.
+    #
+    # The counting and equivariance scripts train nothing and take the floor of
+    # decision 37. The CIFAR sweep trains 36 models - four training-set sizes,
+    # three architectures, three seeds - and is set at roughly 1.5 times its
+    # measured 234.78s rather than at decision 37's per-model rule, which would
+    # allow 2160s here and is not a budget.
+    #
+    # **The first run of that sweep was 302.24s and did not fit.** Decision 62
+    # says the next chapter needing BUDGET_TOTAL raised should not raise it, so
+    # the epoch counts were cut instead and the script's own comment records
+    # what the cut cost. Three seeds were not cut, because section 3's gap
+    # columns are read against the seed spread and a one-seed table cannot
+    # support that reading.
+    #
+    # **This item needs the dataset on disk.** The first run downloads 163 MB,
+    # which took 32 minutes on the machine this was written on and is nowhere
+    # near any per-item budget. That is why the download is not part of the
+    # timed work: fetch once with
+    #   python -c "from rnn_to_transformer_lab.cifar import fetch; fetch()"
+    # and every later run reads the cache. A reader who has not fetched gets a
+    # failure here with that command in the message, which is the trade the
+    # book's author accepted rather than have chapter 10 cite instead of
+    # measure.
+    ("chapter 10 tests", "ch10", ["-m", "pytest", "-q", "tests/test_ch10.py"], 120.0),
+    ("experiments/ch10_counts.py", "ch10", ["experiments/ch10_counts.py"], 30.0),
+    ("experiments/ch10_equivariance.py", "ch10", ["experiments/ch10_equivariance.py"], 30.0),
+    ("experiments/ch10_cifar.py", "ch10", ["experiments/ch10_cifar.py"], 360.0),
 )
 
 #: Raised from 600 to 900 in the chapter 6 session, from the measurement rather
