@@ -28,6 +28,7 @@ from rnn_to_transformer_lab.determinism import describe_environment, utf8_stdout
 from rnn_to_transformer_lab.scaling import (
     CHINCHILLA_ALPHA,
     CHINCHILLA_BETA,
+    KAPLAN_ALPHA_N,
     KAPLAN_P_D,
     KAPLAN_P_N,
     chinchilla_frontier_exponents,
@@ -56,6 +57,47 @@ CHINCHILLA = (70e9, 1.4e12)
 
 #: Brown et al. 2020: 175B parameters, 300B tokens (table 2.1's caption).
 GPT3 = (175e9, 300e9)
+
+#: Hoffmann et al. 2022, table A4: the label, then num_layers, d_model,
+#: ffw_size, num_heads, k/q size, and the ratio of the paper's own exact FLOP
+#: count to 6ND. Everything except the ratio is transcribed from the table; the
+#: ratio is what section 7 below tries and fails to reproduce.
+HOFFMANN_A4 = (
+    ("73M", 10, 640, 2560, 10, 64, 1.03),
+    ("305M", 20, 1024, 4096, 16, 64, 1.10),
+    ("552M", 24, 1280, 5120, 10, 128, 1.08),
+    ("1.1B", 26, 1792, 7168, 14, 128, 1.04),
+    ("1.6B", 28, 2048, 8192, 16, 128, 1.03),
+    ("6.8B", 40, 3584, 14336, 28, 128, 0.99),
+)
+
+
+def hoffmann_exact_forward(n_layers, d_model, ffw, n_heads, kq, n_ctx, vocab):
+    """Appendix F's forward-pass count, term by term, in the paper's order.
+
+    Reproduced here rather than imported from `scaling.py` because it is a
+    different accounting from this book's: it includes the embedding and
+    final-logits matmuls, and it gives the softmax its own line where Kaplan
+    calls softmax a sub-leading term and omits it.
+    """
+    d_attn = n_heads * kq
+    per_layer = (
+        2 * 3 * n_ctx * d_model * d_attn  # key, query and value projections
+        + 2 * n_ctx * n_ctx * d_attn  # key @ query logits
+        + 3 * n_heads * n_ctx * n_ctx  # softmax
+        + 2 * n_ctx * n_ctx * d_attn  # softmax @ query reductions
+        + 2 * n_ctx * d_attn * d_model  # final linear
+        + 2 * n_ctx * (2 * d_model * ffw)  # dense block
+    )
+    return 2 * n_ctx * vocab * d_model + n_layers * per_layer + 2 * n_ctx * d_model * vocab
+
+
+def hoffmann_params(n_layers, d_model, ffw, n_heads, kq, vocab):
+    """Parameters on the paper's own convention: embeddings included."""
+    d_attn = n_heads * kq
+    per_layer = 3 * d_model * d_attn + d_attn * d_model + 2 * d_model * ffw
+    return n_layers * per_layer + vocab * d_model
+
 
 #: Hoffmann et al. 2022, table 3: parameters, FLOPs, tokens.
 HOFFMANN_TABLE_3 = (
@@ -195,7 +237,45 @@ def main() -> None:
     print("the last column is the check that table 3 was built with C = 6ND.")
 
     print()
-    print("6. Kaplan's own optimum, evaluated at two budgets")
+    print("6. what one law's exponent buys, said as a percentage")
+    print("   L(N) ~ N^-alpha_N, so ten times the model multiplies loss by this")
+    print()
+    print("factor on N   loss multiplier   reduction")
+    for factor in (2, 10, 100):
+        mult = factor ** -KAPLAN_ALPHA_N
+        print(f"{factor:<13} {mult:<17.4f} {(1-mult)*100:.1f}%")
+
+    print()
+    print("7. Hoffmann's table A4, and why this repo cannot reproduce it")
+    print("   appendix F counts the embedding and final-logits matmuls, so the")
+    print("   ratio depends on sequence length and vocabulary size - and the")
+    print("   paper states neither, for the sweep or for table A4.")
+    print()
+    print("published:   " + "  ".join(f"{r[6]:>5.2f}" for r in HOFFMANN_A4))
+    print()
+    print("n_ctx  vocab   rebuilt ratios                          worst gap")
+    best = None
+    for n_ctx in (1024, 2048, 4096):
+        for vocab in (32000, 32768, 51200):
+            got = [
+                hoffmann_exact_forward(L, d, ffw, heads, kq, n_ctx, vocab)
+                * 3
+                / (6 * hoffmann_params(L, d, ffw, heads, kq, vocab) * n_ctx)
+                for _, L, d, ffw, heads, kq, _ in HOFFMANN_A4
+            ]
+            worst = max(abs(g - r[6]) for g, r in zip(got, HOFFMANN_A4))
+            if best is None or worst < best[0]:
+                best = (worst, n_ctx, vocab)
+            row = "  ".join(f"{g:>5.2f}" for g in got)
+            print(f"{n_ctx:<6} {vocab:<7} {row}   {worst:.3f}")
+    print()
+    print(f"closest of the nine is n_ctx={best[1]}, vocab={best[2]}, and it is still")
+    print(f"{best[0]:.3f} off on its worst row. none of the nine reproduces the column.")
+    print("recorded as a measurement that was taken and did not work, rather than")
+    print("printed beside the paper's column as though the two were comparable.")
+
+    print()
+    print("8. Kaplan's own optimum, evaluated at two budgets")
     print()
     print("C_min (PF-days)   N_opt          D_opt          D/N")
     for c in (1e2, 1e4, 1e6):
