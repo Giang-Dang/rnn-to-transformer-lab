@@ -48,6 +48,30 @@ git checkout ch03
 python verify.py
 ```
 
+## Checking one chapter
+
+`verify.py` takes `--only`, which runs just that chapter's items:
+
+```
+python verify.py --only ch03      # names and budgets: python verify.py --list
+```
+
+What a single chapter costs varies more than you might expect. Chapters 1, 3,
+4, 7 and 9 are seconds to under two minutes. Chapters 5, 6 and 10 are three to
+five, and chapter 8 is six to seven - it trains twenty-four models across two
+studies, and the third seed in each is the finding rather than padding.
+
+The whole run is about twenty-three minutes, and it drifts by a couple of
+minutes between runs on the same code, because these are wall-clock numbers
+from a laptop that is also doing other things. That drift is why the whole-run
+total is reported against a target rather than enforced as a budget, while each
+individual item's budget is enforced; the note on `TOTAL_TARGET` in `verify.py`
+has the reasoning and the arithmetic.
+
+Use `--only` while you are working on one chapter. Run the whole thing before
+you trust a number in the book against this repo, which is what `verify: ok`
+means.
+
 ## From `ch10`, one download
 
 Chapters 1 to 9 build every byte they train on from a seed, so `verify.py` has

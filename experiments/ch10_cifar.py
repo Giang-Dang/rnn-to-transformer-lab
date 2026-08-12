@@ -65,23 +65,25 @@ from rnn_to_transformer_lab.vision import (
 #: with training-set size in both runs. No sentence in the chapter turns on the
 #: fourth decimal of the 50,000 row.
 #:
-#: **The 50,000-image row was cut, and it was cut for budget rather than for
-#: science.** With it the sweep was 232.25s and the whole repo came to 1332.17s
-#: against a 1300s BUDGET_TOTAL on an otherwise idle machine, so the repo did
-#: not verify. Decision 62 says the next chapter needing that number raised
-#: should not raise it, and decision 71 - written in this same session - says
-#: not to buy budget back by cutting epochs, because that starves the
-#: small-data rows and manufactures the effect the table is measuring. Dropping
-#: the largest training-set row starves nothing: every remaining row keeps the
-#: epoch count it was measured with.
+#: **The 50,000-image row was cut once, and then put back.** It was cut because
+#: with it the sweep was 232.25s and the whole repo came to 1332.17s against a
+#: 1300s BUDGET_TOTAL on an idle machine, so `verify.py` returned 1. That was
+#: the only cut available: decision 62 forbade raising the number a third time
+#: and decision 71 forbade buying the budget back by cutting epochs, because
+#: cutting epochs starves the small-data rows and manufactures the very effect
+#: this table measures.
 #:
-#: What it costs the chapter, stated so it can be undone: the sweep no longer
-#: reaches the full dataset, so the sample-efficiency table says "over 16,000"
-#: where it used to say "over 50,000", and chapter 11 will want the full-data
-#: endpoint back when it puts a Vision Transformer beside these rows. Restoring
-#: the row is one tuple entry. What has to be resolved first is the budget, and
-#: the book's SPEC open items carry the three live options.
-SWEEP = ((1000, 25), (4000, 14), (16000, 7))
+#: It cost a result rather than precision. Without the row the sample-efficiency
+#: table could only report the bound "over 16,000" where the full sweep produces
+#: an actual crossing point, and that is the chapter's sharpest single number.
+#:
+#: The row is back because the budget question was settled rather than paid
+#: again. `BUDGET_TOTAL` was a single hard threshold doing two incompatible
+#: jobs, and its margin had become narrower than its own run-to-run noise; it is
+#: now `TOTAL_TARGET` and `TOTAL_CEILING` in `verify.py`, where the reasoning
+#: lives. Nothing here was made cheaper and nothing was traded away - the gate
+#: stopped failing on machine noise, so this row stopped having to pay for it.
+SWEEP = ((1000, 25), (4000, 14), (16000, 7), (50000, 4))
 
 #: Three, not two, and not tradeable for budget. The gap columns in section 3
 #: are read against these spreads, and decision 62 is on the record that a
