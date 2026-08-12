@@ -97,6 +97,20 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     # the gap between two, and one seed cannot say that.
     ("experiments/ch08_norm.py", "ch08", ["experiments/ch08_norm.py"], 360.0),
     ("experiments/ch08_recipe.py", "ch08", ["experiments/ch08_recipe.py"], 360.0),
+    # Chapter 9 trains nothing at all. Its subject is models four orders of
+    # magnitude past what this repo can run, so every claim it checks is a
+    # count or a closed form, and the two experiment scripts do under a
+    # hundredth of a second of real work each. The floor of decision 37 - 30
+    # seconds for a script that trains no model - is what sets these budgets,
+    # not any measurement of them.
+    #
+    # Worth stating rather than leaving as a coincidence: the note on
+    # BUDGET_TOTAL below says the next chapter that needs it raised should not
+    # raise it. Chapter 9 does not need it raised. It is the first chapter
+    # since chapter 4 that adds no training time whatsoever.
+    ("chapter 9 tests", "ch09", ["-m", "pytest", "-q", "tests/test_ch09.py"], 120.0),
+    ("experiments/ch09_counts.py", "ch09", ["experiments/ch09_counts.py"], 30.0),
+    ("experiments/ch09_laws.py", "ch09", ["experiments/ch09_laws.py"], 30.0),
 )
 
 #: Raised from 600 to 900 in the chapter 6 session, from the measurement rather

@@ -38,6 +38,7 @@ environment, and that is the one to check them against.
 | 06 | `ch06` | Additive attention as Bahdanau et al. define it, on the same cell and corpus as chapter 5; the bidirectional encoder and a parameter-matched ablation of it; chapter 5's width sweep run again with attention; how far a gradient reaches back into the source in each model; the alignment matrix, and the rate at which it crosses |
 | 07 | `ch07` | The Transformer built from the paper's equations: scaled dot-product attention with the variance argument measured, multi-head attention, sinusoidal positional encoding and its linear-shift property, post-LN residual blocks, and the causal mask tested by intervention rather than by reading the code |
 | 08 | `ch08` | Table 1 turned into counted FLOPs, bytes and wall clock, with the count checked against torch's own operator instrumentation; the same layer timed against both things "a recurrent layer" can mean; pre-LN as an option on every layer, with the final LayerNorm it needs; the warmup schedule of section 5.3; and label smoothing measured against the loss floor it creates |
+| 09 | `ch09` | Closed-form parameter counts for encoder-only and decoder-only stacks, checked against `sum(p.numel())` on modules this repo builds, then used to rebuild the published counts of BERT, GPT-1, GPT-2 and GPT-3 from those papers' own hyperparameter tables; the exact per-token FLOP count of a whole stack against the `C = 6ND` approximation the scaling papers rest on; and the fitted laws of Kaplan et al. and Hoffmann et al. evaluated as functions. Trains nothing and times nothing, so every number here is identical on every machine |
 
 Check out a tag to get exactly the code a chapter quotes:
 
@@ -64,6 +65,9 @@ rnn_to_transformer_lab/
   seq2seq.py         the encoder-decoder, greedy and beam decoding, ensembling
   transformer.py     the Transformer, both layer-norm orders, chapters 7 and 8
   cost.py            table 1 in closed form: FLOPs, crossovers, bytes
+  scaling.py         parameter counts and compute budgets, chapter 9: what a
+                       published configuration actually holds, and what 6ND
+                       leaves out
 experiments/         one script per set of numbers a chapter prints
   ch08_clock_canonical.txt  the raw run every chapter 8 clock table quotes
   ch08_clock_repeat{2,3,4}.txt  three more independent runs of the same script,
