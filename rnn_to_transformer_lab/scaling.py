@@ -18,10 +18,12 @@ plausible-looking Transformer.
 **Why the split between embedding and non-embedding matters.** Kaplan et al.
 define N as the non-embedding parameter count and are explicit that the laws
 do not hold for the other count. That is not bookkeeping: at GPT-1's size the
-token embedding table is a quarter of the model, and at GPT-3's it is a third
-of one percent. A rule fitted against one definition and applied to the other
-is being applied across a factor that moves by two orders of magnitude over
-the range it was fitted on. Every function here returns the split.
+token embedding table is 27% of the model, and at GPT-3's it is 0.37%. A rule
+fitted against one definition and applied to the other is being applied across
+a factor that moves by 73 over the range it was fitted on - measured, in
+`experiments/ch09_counts.py`, not rounded to "two orders of magnitude" the way
+an earlier draft of this docstring had it. Every function here returns the
+split.
 
 **The counting convention is chapter 8's**, unchanged: one multiply-add is 2
 FLOPs, so an (m x k) by (k x p) product costs 2*m*k*p. Halve everything for
