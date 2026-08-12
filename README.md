@@ -66,6 +66,9 @@ rnn_to_transformer_lab/
   cost.py            table 1 in closed form: FLOPs, crossovers, bytes
 experiments/         one script per set of numbers a chapter prints
   ch08_clock_canonical.txt  the raw run every chapter 8 clock table quotes
+  ch08_clock_repeat{2,3,4}.txt  three more independent runs of the same script,
+                       which is how chapter 8 shows the head-count slowdown is
+                       stable rather than one machine having a bad minute
 tests/               those numbers, asserted
 verify.py            the gate
 ```
