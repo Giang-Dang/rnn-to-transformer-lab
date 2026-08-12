@@ -416,8 +416,9 @@ def train(
     epochs: int,
     learning_rate: float = 0.01,
     clip: float = 5.0,
+    schedule=None,
 ) -> list[float]:
-    """Adam, gradient-norm clipping, no learning rate schedule.
+    """Adam and gradient-norm clipping; a learning rate schedule only if asked.
 
     The clip is the paper's, section 3.4: "we enforced a hard constraint on the
     norm of the gradient by scaling it when its norm exceeded a threshold ...
@@ -425,8 +426,20 @@ def train(
     is not the paper's, which is plain SGD at a learning rate of 0.7 halved
     every half epoch after the fifth; Adam is here because the book's budget is
     seconds rather than ten days, and chapter 5 says so.
+
+    `schedule` arrives at tag ch08 for chapter 8's warmup table and is `None`
+    everywhere else. When it is None no scheduler object is constructed and no
+    `step()` is called, so the loop below runs the exact sequence of updates it
+    ran at tag ch07 and every chapter 5 to 7 number is reproducible from here.
+    When it is given, it is a callable from step index to a multiplier on
+    `learning_rate`, applied per *batch* rather than per epoch, because the
+    paper's `step_num` counts optimizer steps.
     """
     optimizer = torch.optim.Adam(model.parameters(), lr=learning_rate)
+    scheduler = (
+        None if schedule is None
+        else torch.optim.lr_scheduler.LambdaLR(optimizer, schedule)
+    )
     losses: list[float] = []
     for _ in range(epochs):
         for source, target in batched:
@@ -435,5 +448,7 @@ def train(
             loss.backward()
             torch.nn.utils.clip_grad_norm_(model.parameters(), clip)
             optimizer.step()
+            if scheduler is not None:
+                scheduler.step()
             losses.append(loss.item())
     return losses

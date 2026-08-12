@@ -36,6 +36,8 @@ environment, and that is the one to check them against.
 | 04 | `ch04` | The 1997 memory cell with no forget gate; the constant error carousel and its derivative; the input weight conflict solved in closed form; what the paper's truncation costs; parameter counts against the plain layer; the adding problem at lag 100 |
 | 05 | `ch05` | The encoder-decoder of Sutskever et al.; a generated English-Vietnamese toy corpus; the fixed-length context vector measured by shrinking it; source reversal; beam search; ensembling |
 | 06 | `ch06` | Additive attention as Bahdanau et al. define it, on the same cell and corpus as chapter 5; the bidirectional encoder and a parameter-matched ablation of it; chapter 5's width sweep run again with attention; how far a gradient reaches back into the source in each model; the alignment matrix, and the rate at which it crosses |
+| 07 | `ch07` | The Transformer built from the paper's equations: scaled dot-product attention with the variance argument measured, multi-head attention, sinusoidal positional encoding and its linear-shift property, post-LN residual blocks, and the causal mask tested by intervention rather than by reading the code |
+| 08 | `ch08` | Table 1 turned into counted FLOPs, bytes and wall clock, with the count checked against torch's own operator instrumentation; the same layer timed against both things "a recurrent layer" can mean; pre-LN as an option on every layer, with the final LayerNorm it needs; the warmup schedule of section 5.3; and label smoothing measured against the loss floor it creates |
 
 Check out a tag to get exactly the code a chapter quotes:
 
@@ -60,7 +62,10 @@ rnn_to_transformer_lab/
   toy_corpus.py      the generated English-Vietnamese corpus chapters 5 to 8 use
   attention.py       additive attention, the bidirectional encoder, chapter 6
   seq2seq.py         the encoder-decoder, greedy and beam decoding, ensembling
+  transformer.py     the Transformer, both layer-norm orders, chapters 7 and 8
+  cost.py            table 1 in closed form: FLOPs, crossovers, bytes
 experiments/         one script per set of numbers a chapter prints
+  ch08_clock_canonical.txt  the raw run every chapter 8 clock table quotes
 tests/               those numbers, asserted
 verify.py            the gate
 ```

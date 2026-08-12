@@ -82,6 +82,21 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
     # ch07. The chapter's whole argument is that the extra epochs are the
     # finding, so this is not a budget that can be bought back by training less.
     ("experiments/ch07_corpus.py", "ch07", ["experiments/ch07_corpus.py"], 180.0),
+    ("chapter 8 tests", "ch08", ["-m", "pytest", "-q", "tests/test_ch08.py"], 120.0),
+    ("experiments/ch08_flops.py", "ch08", ["experiments/ch08_flops.py"], 30.0),
+    # A timing script, so its budget is the one number here that is not about
+    # this machine: a laptop with fewer cores or a slower memory bus can be
+    # several times slower on the same code without anything being wrong.
+    ("experiments/ch08_clock.py", "ch08", ["experiments/ch08_clock.py"], 180.0),
+    # Twelve trainings each: four configurations at three seeds. Decision 37's
+    # "60 seconds per model trained" would allow 720s for either of these, which
+    # is not a budget so much as an absence of one, so both are set at roughly
+    # twice their measured time instead. Three seeds rather than one is not
+    # optional here and cannot be traded away for budget: the whole finding of
+    # the norm table is that the spread within one configuration is wider than
+    # the gap between two, and one seed cannot say that.
+    ("experiments/ch08_norm.py", "ch08", ["experiments/ch08_norm.py"], 360.0),
+    ("experiments/ch08_recipe.py", "ch08", ["experiments/ch08_recipe.py"], 360.0),
 )
 
 #: Raised from 600 to 900 in the chapter 6 session, from the measurement rather
@@ -116,7 +131,42 @@ ITEMS: tuple[tuple[str, str, list[str], float], ...] = (
 #: scaling probe and the positional one - and the two that do train are the
 #: whole of the 91s. A chapter whose claims are mostly about a computation
 #: rather than about a trained model is cheap to verify, and chapter 7's are.
-BUDGET_TOTAL = 900.0
+#:
+#: Raised from 900 to 1300 in the chapter 8 session, from the measurement, and
+#: this is the second raise so the reasoning has to be better than "it did not
+#: fit". Measured at tag ch08: the whole run is 1132.13s, of which chapter 8 is
+#: 365.46s - 2.65s of tests, 2.03s for the FLOP tables, 20.87s for the clock,
+#: 168.37s for the layer-norm study and 171.54s for the regularizers. Every
+#: individual item passed its own budget; only the total was over.
+#:
+#: Two of chapter 8's items are 93% of its cost and both are twelve trainings,
+#: four configurations at three seeds. That third seed is not padding and
+#: cannot be traded back for budget: the finding of the layer-norm table is
+#: that the spread *within* one configuration (0.3800 to 0.6500 exact match) is
+#: wider than the gap *between* configurations, and a one-seed table asserts an
+#: effect that three seeds show is noise. Decision 44 is the same lesson one
+#: level down. Buying the budget back there would buy back a wrong chapter.
+#:
+#: On the size of the margin. Chapters 1 to 7 came in at 766.67s in this run
+#: against the 663.51s recorded at tag ch07 on identical code - 103 seconds of
+#: spread, wider than the 70s the ch06 note measured, because this run shared
+#: the machine with other work. A budget whose headroom is narrower than its
+#: own noise is not a budget, which is the argument the ch06 note made for 900
+#: and it has not changed. 1300 leaves about 170s over the contended
+#: measurement and around a fifth over an uncontended one.
+#:
+#: What has NOT been re-decided is what the budget is for, and this is now the
+#: question rather than a formality. Decision 13 promises a reader with no
+#: graphics card that every experiment finishes in minutes. 900s was fifteen
+#: minutes; 1300s is nearly twenty-two, and the honest thing to say is that
+#: this is approaching the edge of what "minutes" can be stretched to cover.
+#: The next chapter that needs it moved should not move it. It should either
+#: make an experiment cheaper - the open item on `torch.nn.LSTM` in the book's
+#: SPEC is the largest single lever nobody has pulled, and chapter 8's own
+#: clock table now measures that lever at 50 to 95 times on this hardware - or
+#: split `verify.py` so a reader can check one chapter without running all of
+#: them, which `--only` already allows and the README does not yet teach.
+BUDGET_TOTAL = 1300.0
 
 
 def run(label: str, argv: list[str], budget: float) -> tuple[bool, bool, float]:

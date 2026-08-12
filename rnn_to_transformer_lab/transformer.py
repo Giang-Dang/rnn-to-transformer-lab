@@ -49,8 +49,17 @@ and the chapter prints parameter counts.
     LayerNorm(x + Sublayer(x))
 
 with the normalization *after* the residual addition. Later work moved it
-before, and this repo keeps the paper's order; chapter 8 is where that
-difference is measured rather than asserted.
+before, and this is the paper's order and this module's default. Chapter 8 is
+where the difference is measured rather than asserted, so from tag ch08 every
+layer here takes `norm_first`, and setting it gives
+
+    x + Sublayer(LayerNorm(x))
+
+which is the Pre-LN arrangement of Xiong et al. (2020), their table 1. That
+table carries one row that is easy to miss and easy to omit in an
+implementation: Pre-LN needs a *final* LayerNorm after the whole stack, before
+the prediction, or the stack's output is never normalized at all. `Transformer`
+adds it, on each side, and only when `norm_first` is set.
 
 **Sinusoidal positional encoding, section 3.5.**
 
@@ -81,15 +90,21 @@ Departures from the paper, all of them forced by this repo's constraints:
   kept.
 * **Dropout defaults to zero.** Section 5.4 applies P_drop = 0.1 to every
   sub-layer output and to the embedding sums. The mechanism is implemented and
-  wired to the paper's three places; the default is off because this corpus is
+  wired to the paper's places; the default is off because this corpus is
   a finite grammar seen thousands of times, where dropout only removes signal.
   Chapter 8 is where the regularization is turned on and measured.
+* **Label smoothing defaults to zero**, for the same reason and measured in the
+  same place. Section 5.4 uses eps_ls = 0.1. From tag ch08 `Transformer` takes
+  `label_smoothing` and hands it to the loss, so that a chapter 8 table can
+  move it without touching the training loop.
 * **The optimizer is this repo's shared recipe, not the paper's.** Section 5.3
   uses Adam with a warmup schedule over 4000 steps. `train_one` takes the
   learning rate, the batch size, the epoch count and the split from `seq2seq`,
   unchanged, for the reason chapter 6 gives: two chapters whose tables sit side
   by side have to differ in one thing only, and here that thing is the
-  architecture. The warmup schedule is chapter 8's subject.
+  architecture. `warmup_lambda` below is the paper's own formula, added at tag
+  ch08 so chapter 8 can put the two recipes side by side; nothing uses it
+  unless a caller asks for it, so every chapter 5 to 7 number is untouched.
 """
 
 from __future__ import annotations
@@ -247,20 +262,39 @@ class PositionwiseFeedForward(nn.Module):
 
 
 class EncoderLayer(nn.Module):
-    """Section 3.1: self-attention, then the feed-forward network, both post-LN."""
+    """Section 3.1: self-attention, then the feed-forward network.
+
+    `norm_first` picks which of the two arrangements chapter 8 compares. False
+    is the paper's, LayerNorm(x + Sublayer(x)); True is Pre-LN,
+    x + Sublayer(LayerNorm(x)). The two hold exactly the same parameters in the
+    same shapes, so a parameter count cannot tell them apart and neither can a
+    state dict: only the order of the two operations differs.
+    """
 
     def __init__(
-        self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.0
+        self,
+        d_model: int,
+        n_heads: int,
+        d_ff: int,
+        dropout: float = 0.0,
+        norm_first: bool = False,
     ) -> None:
         super().__init__()
         self.self_attention = MultiHeadAttention(d_model, n_heads, dropout)
         self.feed_forward = PositionwiseFeedForward(d_model, d_ff, dropout)
         self.norm_attention = nn.LayerNorm(d_model)
         self.norm_feed_forward = nn.LayerNorm(d_model)
+        self.norm_first = norm_first
 
     def forward(
         self, x: torch.Tensor, mask: torch.Tensor | None
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.norm_first:
+            normed = self.norm_attention(x)
+            attended, weights = self.self_attention(normed, normed, normed, mask)
+            x = x + attended
+            x = x + self.feed_forward(self.norm_feed_forward(x))
+            return x, weights
         attended, weights = self.self_attention(x, x, x, mask)
         x = self.norm_attention(x + attended)
         x = self.norm_feed_forward(x + self.feed_forward(x))
@@ -279,7 +313,12 @@ class DecoderLayer(nn.Module):
     """
 
     def __init__(
-        self, d_model: int, n_heads: int, d_ff: int, dropout: float = 0.0
+        self,
+        d_model: int,
+        n_heads: int,
+        d_ff: int,
+        dropout: float = 0.0,
+        norm_first: bool = False,
     ) -> None:
         super().__init__()
         self.self_attention = MultiHeadAttention(d_model, n_heads, dropout)
@@ -288,6 +327,7 @@ class DecoderLayer(nn.Module):
         self.norm_self = nn.LayerNorm(d_model)
         self.norm_cross = nn.LayerNorm(d_model)
         self.norm_feed_forward = nn.LayerNorm(d_model)
+        self.norm_first = norm_first
 
     def forward(
         self,
@@ -296,6 +336,16 @@ class DecoderLayer(nn.Module):
         target_mask: torch.Tensor,
         source_mask: torch.Tensor | None,
     ) -> tuple[torch.Tensor, torch.Tensor]:
+        if self.norm_first:
+            normed = self.norm_self(x)
+            attended, _ = self.self_attention(normed, normed, normed, target_mask)
+            x = x + attended
+            crossed, cross_weights = self.cross_attention(
+                self.norm_cross(x), memory, memory, source_mask
+            )
+            x = x + crossed
+            x = x + self.feed_forward(self.norm_feed_forward(x))
+            return x, cross_weights
         attended, _ = self.self_attention(x, x, x, target_mask)
         x = self.norm_self(x + attended)
         crossed, cross_weights = self.cross_attention(x, memory, memory, source_mask)
@@ -323,11 +373,15 @@ class Transformer(nn.Module):
         d_ff: int | None = None,
         dropout: float = 0.0,
         max_positions: int = 64,
+        norm_first: bool = False,
+        label_smoothing: float = 0.0,
     ) -> None:
         super().__init__()
         self.d_model = d_model
         self.n_heads = n_heads
         self.n_layers = n_layers
+        self.norm_first = norm_first
+        self.label_smoothing = label_smoothing
         # Section 3.3 sets d_ff to four times d_model (2048 against 512), so
         # the ratio is the paper's even though the sizes are not.
         self.d_ff = d_ff if d_ff is not None else 4 * d_model
@@ -346,13 +400,23 @@ class Transformer(nn.Module):
         self.embedding_dropout = nn.Dropout(dropout)
 
         self.encoder_layers = nn.ModuleList(
-            EncoderLayer(d_model, n_heads, self.d_ff, dropout)
+            EncoderLayer(d_model, n_heads, self.d_ff, dropout, norm_first)
             for _ in range(n_layers)
         )
         self.decoder_layers = nn.ModuleList(
-            DecoderLayer(d_model, n_heads, self.d_ff, dropout)
+            DecoderLayer(d_model, n_heads, self.d_ff, dropout, norm_first)
             for _ in range(n_layers)
         )
+        # Xiong et al. (2020) table 1 sets this on a line of its own: a Pre-LN
+        # stack needs one more LayerNorm after the last layer, before the
+        # prediction. Without it nothing normalizes the stack's output, because
+        # every layer inside now normalizes its own *input* instead. Post-LN
+        # needs no such thing - its last operation already is a LayerNorm - so
+        # these are Identity there and the parameter counts differ by 4 *
+        # d_model between the two arrangements. That is the one number that can
+        # tell them apart from outside, and chapter 8 prints it.
+        self.encoder_norm = nn.LayerNorm(d_model) if norm_first else nn.Identity()
+        self.decoder_norm = nn.LayerNorm(d_model) if norm_first else nn.Identity()
         self.readout = nn.Linear(d_model, len(target_vocab))
 
     def _embed(self, tokens: torch.Tensor, embedding: nn.Embedding) -> torch.Tensor:
@@ -374,7 +438,7 @@ class Transformer(nn.Module):
         x = self._embed(tokens, self.source_embedding)
         for layer in self.encoder_layers:
             x, _ = layer(x, mask)
-        return x, mask
+        return self.encoder_norm(x), mask
 
     def decode(
         self,
@@ -389,7 +453,7 @@ class Transformer(nn.Module):
         weights = None
         for layer in self.decoder_layers:
             x, weights = layer(x, memory, target_mask, source_mask)
-        return self.readout(x).transpose(0, 1), weights
+        return self.readout(self.decoder_norm(x)).transpose(0, 1), weights
 
     def forward(self, source: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
         memory, source_mask = self.encode(source)
@@ -397,11 +461,24 @@ class Transformer(nn.Module):
         return logits
 
     def loss(self, source: torch.Tensor, target: torch.Tensor) -> torch.Tensor:
+        """Cross-entropy, optionally with section 5.4's label smoothing.
+
+        `label_smoothing` in torch is Szegedy et al.'s epsilon: the target
+        distribution becomes (1 - eps) on the true token plus eps/K spread over
+        all K classes rather than a one-hot. Two consequences chapter 8 leans
+        on. The loss of a *perfect* model is no longer zero, because a one-hot
+        prediction can never match a smoothed target, so a smoothed loss and an
+        unsmoothed one are not on the same scale and must never be read as one
+        column. And the padding class is included in K here: `ignore_index`
+        drops padded *targets* from the average, it does not remove the padding
+        token from the vocabulary the smoothing spreads mass over.
+        """
         logits = self(source, target)
         return nn.functional.cross_entropy(
             logits.reshape(-1, logits.shape[-1]),
             target[1:].reshape(-1),
             ignore_index=PAD_INDEX,
+            label_smoothing=self.label_smoothing,
         )
 
 
@@ -479,6 +556,35 @@ def greedy_accuracy(
     return sum(hit for _, hit in hits) / len(hits), hits
 
 
+def warmup_lambda(d_model: int, warmup_steps: int):
+    """Section 5.3's equation (3), as a multiplier on a base learning rate of 1.
+
+        lrate = d_model^-0.5 * min(step^-0.5, step * warmup_steps^-1.5)
+
+    Returned in the shape `torch.optim.lr_scheduler.LambdaLR` wants, which
+    calls it with a step counter starting at 0. The paper's `step_num` starts
+    at 1 - equation (3) divides by it - so the shift is done here rather than
+    left to the caller to get wrong.
+
+    Two things worth seeing in the formula rather than being told. The `min`
+    switches branches exactly at `step = warmup_steps`, where both arms equal
+    `warmup_steps^-0.5`, so the schedule is continuous at its own peak; and the
+    peak value is `(d_model * warmup_steps)^-0.5`, which is why a wider model
+    gets a *smaller* learning rate under the paper's recipe and why the number
+    cannot be copied between two models of different width.
+    """
+    if warmup_steps <= 0:
+        raise ValueError(f"warmup_steps must be positive, got {warmup_steps}")
+
+    def scale(step: int) -> float:
+        step_num = step + 1
+        return d_model ** -0.5 * min(
+            step_num ** -0.5, step_num * warmup_steps ** -1.5
+        )
+
+    return scale
+
+
 def train_one(
     seed: int,
     reverse_source: bool = False,
@@ -489,13 +595,22 @@ def train_one(
     epochs: int | None = None,
     train_pairs=None,
     dropout: float = 0.0,
+    norm_first: bool = False,
+    label_smoothing: float = 0.0,
+    learning_rate: float | None = None,
+    schedule=None,
 ):
     """One Transformer under chapters 5 and 6's shared recipe, given `seed`.
 
     Split sizes, batch size, epoch count, learning rate and the optimizer all
-    come from `seq2seq` unchanged, for the reason chapter 6's `train_one` gives
-    and for one more: the paper's own schedule is chapter 8's subject, and a
-    chapter 7 table trained under it could not be set beside chapter 6's.
+    come from `seq2seq` unchanged, for the reason chapter 6's `train_one` gives.
+
+    The last six arguments arrive at tag ch08 and every one of them defaults to
+    the recipe chapters 5 to 7 ran, so a call written for chapter 7 gets the
+    same model it always did. `schedule` takes a callable from step index to a
+    learning-rate multiplier - `warmup_lambda` above returns one - and when it
+    is given, `learning_rate` is the base the multiplier scales, so the paper's
+    schedule wants a base of 1.0 rather than the shared recipe's 0.005.
     """
     from .seq2seq import BATCH, EPOCHS, LEARNING_RATE, N_TEST, N_TRAIN, train
     from .toy_corpus import batches, disjoint_splits, vocabularies
@@ -512,9 +627,12 @@ def train_one(
     )
     model = Transformer(
         source_vocab, target_vocab, d_model=d_model, n_heads=n_heads,
-        n_layers=n_layers, d_ff=d_ff, dropout=dropout,
+        n_layers=n_layers, d_ff=d_ff, dropout=dropout, norm_first=norm_first,
+        label_smoothing=label_smoothing,
     )
     losses = train(
-        model, batched, epochs=epochs or EPOCHS, learning_rate=LEARNING_RATE
+        model, batched, epochs=epochs or EPOCHS,
+        learning_rate=LEARNING_RATE if learning_rate is None else learning_rate,
+        schedule=schedule,
     )
     return model, losses
